@@ -1,18 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="30 30 780 780" width="840" height="840" fill="none">
-  <title>Trade Desk</title>
-  <desc>Vector anchor traced against the approved 840px gray-clay-blue reference. Original ribbon coordinates retained; outer padding and shadow reduced for small icons.</desc>
+  <title>Cubic</title>
+  <desc>Cubic mark: an isometric cube whose left face is a ruled notebook page, for notebook orders and their CBM. Gray-clay-blue palette on the warm-white tile.</desc>
   <defs>
-    <linearGradient id="rear" x1="475" y1="249" x2="637" y2="558" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#8EA4AD"/>
-      <stop offset="1" stop-color="#5F808E"/>
-    </linearGradient>
-    <linearGradient id="front" x1="340" y1="249" x2="260" y2="558" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#5B7C8A"/>
-      <stop offset=".55" stop-color="#587986"/>
-      <stop offset="1" stop-color="#4B6976"/>
-    </linearGradient>
+    <mask id="cube" maskUnits="userSpaceOnUse" x="0" y="0" width="840" height="840">
+      <path fill="#FFF" stroke="#FFF" stroke-width="40" stroke-linejoin="round" d="M420 154L650 287V553L420 686L190 553V287Z"/>
+    </mask>
   </defs>
   <path fill="#FFFEFB" stroke="#D8D8D0" stroke-width="1.5" d="M235 58H605C713 58 780 122 780 235V586C780 699 716 762 605 762H235C124 762 60 699 60 586V235C60 122 127 58 235 58Z"/>
-  <path id="ribbon" fill="url(#rear)" d="M358 249H478C524.02 249.76 553.52 271.64 578 294C620.65 329.6 659.59 369.16 693 414C711.26 441.12 714.83 480.9 714 527C713.13 546.78 702.81 557.18 683 558H569C550.76 557.33 540.7 546.21 539 529C540.85 454.34 521.59 403.21 497 355C485.29 347.03 473.76 341.92 454 342C398.78 347.89 364.65 382.4 339 418C319.83 447.01 306.95 481.78 306 529C305.04 547.17 293.45 558.31 274 558H157C139.37 556.89 128.98 546.76 128 529C127.23 491.14 129.19 456.3 140 430C171.25 375.94 218.47 334.94 263 294C287.66 272.97 314.76 251.41 358 249Z"/>
-  <path id="overlap" fill="url(#front)" d="M358 249C429.24 250.14 466.28 299.04 497 355C485.29 347.03 473.76 341.92 454 342C398.78 347.89 364.65 382.4 339 418C319.83 447.01 306.95 481.78 306 529C305.04 547.17 293.45 558.31 274 558H157C139.37 556.89 128.98 546.76 128 529C127.23 491.14 129.19 456.3 140 430C171.25 375.94 218.47 334.94 263 294C287.66 272.97 314.76 251.41 358 249Z"/>
+  <g mask="url(#cube)">
+    <path fill="#8EA4AD" d="M420 420L-40 154L420 -112L880 154Z"/>
+    <path fill="#587786" d="M420 420L-40 154V952H420Z"/>
+    <path fill="#4B6976" d="M420 420L880 154V952H420Z"/>
+    <path stroke="#FFFEFB" stroke-width="14" stroke-linecap="round" d="M420 420L150 264M420 420L690 264M420 420V720"/>
+    <path stroke="#FFFEFB" stroke-width="22" stroke-linecap="round" opacity=".55" d="M236 404L362 477M236 464L328 517"/>
+  </g>
 </svg>

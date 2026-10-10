@@ -39,7 +39,7 @@ fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     };
 
-    let open_item = MenuItem::with_id(app, "open", "打开 Trade Desk", true, None::<&str>)?;
+    let open_item = MenuItem::with_id(app, "open", "打开 Cubic", true, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "退出程序", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open_item, &quit_item])?;
     let icon = app

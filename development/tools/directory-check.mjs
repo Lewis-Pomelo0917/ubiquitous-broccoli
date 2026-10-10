@@ -126,8 +126,8 @@ async function checkWork(root, workPath, findings) {
       const values = fields.get(field) ?? [];
       if (values.length !== 1 || !values[0]) findings.push({ code: 'WORK_TASK_FIELD', path: `${shown}/TASK.md`, reason: `“${field}：内容”必须恰好出现一次且非空。` });
     }
-    if ((fields.get('项目') ?? []).length === 1 && fields.get('项目')[0] !== 'Trade Desk') {
-      findings.push({ code: 'WORK_TASK_PROJECT', path: `${shown}/TASK.md`, reason: '项目不是 Trade Desk；归属需由规划核实。' });
+    if ((fields.get('项目') ?? []).length === 1 && !['Cubic', 'Trade Desk'].includes(fields.get('项目')[0])) {
+      findings.push({ code: 'WORK_TASK_PROJECT', path: `${shown}/TASK.md`, reason: '项目不是 Cubic（原名 Trade Desk）；归属需由规划核实。' });
     }
   }
 }
@@ -237,7 +237,7 @@ async function selfTest() {
     for (const directory of directories) await mkdir(join(root, directory), { recursive: true });
     for (const file of files) await writeFile(join(root, file), 'fixture');
     await writeFile(join(root, 'development/desktop/package.json'), JSON.stringify({ scripts: { pretauri: 'node ../tools/directory-check.mjs' } }));
-    await writeFile(join(root, 'work/sample-task/TASK.md'), '项目：Trade Desk\n用途：隔离自检样例\n状态：自检中\n');
+    await writeFile(join(root, 'work/sample-task/TASK.md'), '项目：Cubic\n用途：隔离自检样例\n状态：自检中\n');
     assert.deepEqual(await inspectLayout(root), [], 'valid source tree should pass');
 
     await writeFile(join(root, '.unexpected'), 'fixture');

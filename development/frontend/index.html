@@ -7,7 +7,7 @@
   <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#191C1B">
   <meta name="color-scheme" content="light dark">
   <link rel="icon" href="./trade-desk-logo.svg" type="image/svg+xml">
-  <title>Trade Desk · 外贸实用工具</title>
+  <title>Cubic · 外贸实用工具</title>
   <script>try{var __tdt=localStorage.getItem('td-theme');if(__tdt==='dark'||__tdt==='light')document.documentElement.setAttribute('data-theme',__tdt);}catch(__e){}</script>
   <style>
     :root {
@@ -2676,7 +2676,7 @@
         <div class="brand">
           <div class="brand-mark" aria-hidden="true"><img src="./trade-desk-logo.svg" alt=""></div>
           <div>
-            <h1 class="brand-name">Trade Desk</h1>
+            <h1 class="brand-name">Cubic</h1>
             <p class="brand-caption">外贸实用工具 · notebook &amp; export helpers</p>
           </div>
         </div>
@@ -2712,7 +2712,7 @@
           <div class="welcome-cover">
             <div class="welcome-cover-main">
               <div class="welcome-cover-text">
-              <h2 class="welcome-title" id="welcome-title">Trade Desk</h2>
+              <h2 class="welcome-title" id="welcome-title">Cubic</h2>
               <p class="welcome-lede">外贸常用工具，一处完成。</p>
             </div>
             <div class="welcome-tiles">
@@ -3648,14 +3648,14 @@
     </main>
 
     <footer class="app-footer">
-       <span>Trade Desk · 0.1.5-dev-0921</span>
+       <span>Cubic · 0.1.5-dev-0921</span>
       <span>© 2026 罗志杰。保留所有权利。</span>
     </footer>
   </div>
 
   <dialog class="app-dialog" id="close-choice-dialog" aria-labelledby="close-choice-title">
     <div class="app-dialog-body">
-      <h2 class="app-dialog-title" id="close-choice-title">关闭 Trade Desk？</h2>
+      <h2 class="app-dialog-title" id="close-choice-title">关闭 Cubic？</h2>
       <p class="app-dialog-copy">请选择关闭方式。最小化到托盘后，可从右下角托盘重新打开。</p>
       <p class="app-dialog-status" id="close-choice-status" role="status" aria-live="polite"></p>
       <div class="app-dialog-actions">
@@ -6012,7 +6012,7 @@
       const exportMemos = async () => {
         const saved = flushMemoSave();
         const payload = {
-          app: 'Trade Desk',
+          app: 'Cubic',
           schemaVersion: 2,
           exportedAt: memoNow(),
           notes: memoState.notes.map((note) => ({ ...note, tags: [...note.tags] }))
@@ -6022,7 +6022,7 @@
           const url = URL.createObjectURL(new Blob([json], { type: 'application/json;charset=utf-8' }));
           const link = document.createElement('a');
           link.href = url;
-          link.download = `trade-desk-memos-${memoDateKey()}.json`;
+          link.download = `cubic-memos-${memoDateKey()}.json`;
           link.rel = 'noopener';
           document.body.appendChild(link);
           link.click();
