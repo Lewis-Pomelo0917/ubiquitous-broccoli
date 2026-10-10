@@ -958,8 +958,24 @@
       overflow-wrap: anywhere;
     }
 
+    .amount-result-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 11px;
+    }
+
+    .amount-copy {
+      display: flex;
+      flex: 0 0 auto;
+      align-items: center;
+      gap: 10px;
+    }
+
     .amount-result-formula {
-      margin: 11px 0 0;
+      min-width: 0;
+      margin: 0;
       color: var(--muted);
       font-size: 11px;
       font-variant-numeric: tabular-nums;
@@ -2570,7 +2586,7 @@
       .calculator-grid,
       .pantone-grid { grid-template-columns: 1fr; }
       .welcome-cover { padding: 28px; }
-      .mobile-result-jump { display: inline-flex; }
+      .mobile-result-jump { display: inline-flex; align-items: center; justify-content: center; }
     }
     @media (max-width: 780px) {
       .plain-number-grid { grid-template-columns: 1fr; }
@@ -2578,7 +2594,10 @@
       .welcome-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .form-actions,
       .advanced-actions,
-      .amount-actions { align-items: flex-start; flex-wrap: wrap; }
+      .amount-actions { align-items: center; flex-wrap: wrap; }
+      .form-actions > .mobile-result-jump,
+      .advanced-actions > .mobile-result-jump,
+      .amount-actions > .mobile-result-jump { margin-left: auto; }
       .form-actions > .footnote,
       .advanced-actions > .footnote,
       .amount-actions > .footnote { flex: 1 1 100%; }
@@ -3256,7 +3275,10 @@
             <div class="amount-result-head">
               <div class="result-head-row"><p class="result-label" id="amount-result-title">英文金额 · Amount in words</p><span class="result-state" id="amount-result-state">已转换</span></div>
               <div class="amount-result-hero" id="amount-primary" aria-live="polite">US DOLLARS TWELVE THOUSAND THREE HUNDRED FORTY-FIVE AND 67/100 ONLY</div>
-              <p class="amount-result-formula" id="amount-parsed">12,345.67 USD · 单据格式 · 美式英语</p>
+              <div class="amount-result-meta">
+                <p class="amount-result-formula" id="amount-parsed">12,345.67 USD · 单据格式 · 美式英语</p>
+                <div class="amount-copy"><span class="copy-status" id="amount-copy-status" aria-live="polite"></span><button class="btn btn-primary" type="button" id="amount-copy-btn">复制结果</button></div>
+              </div>
             </div>
             <div class="amount-result-body">
               <div class="stat-grid">
@@ -3272,8 +3294,6 @@
               </div>
 
               <p class="amount-state-note" id="amount-state-note">金额用途默认采用两位小数；JPY、KRW 等币种没有小数单位。</p>
-
-              <div class="copy-row"><span class="copy-status" id="amount-copy-status" aria-live="polite"></span><button class="btn btn-primary" type="button" id="amount-copy-btn">复制结果</button></div>
             </div>
           </section>
         </div>
