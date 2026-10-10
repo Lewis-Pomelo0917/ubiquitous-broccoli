@@ -2553,25 +2553,33 @@
       to { opacity: 0; transform: translate3d(0, -3px, 0); }
     }
 
-    @supports (corner-shape: squircle) {
-      .panel,
-      .welcome-cover,
-      .home-ai-card,
-      .btn,
-      .mini-btn,
-      .calc-key,
-      .welcome-tile,
-      .pantone-card,
-      .memo-card-head,
-      .memo-calendar-day,
-      .memo-list-open,
-      .memo-tag,
-      .home-ai-link,
-      .memo-calendar-card,
-      .memo-list-card,
-      .memo-editor,
-      .world-clock-card,
-      .container-estimate { corner-shape: squircle; }
+    /* Superellipse corners on every cornered surface. superellipse(1.5) sits between round and squircle, and the
+       ~1.7x radii keep corners slightly softer than the circular fallback while easing into the straight edges.
+       Pills and circles keep round ends: a superellipse squares them off, and the tab lens refraction map assumes a capsule. */
+    @supports (corner-shape: superellipse(1.5)) {
+      :root {
+        --radius-panel: 30px;
+        --radius-card: 20px;
+        --radius-control: 15px;
+        --radius-small: 10px;
+        --radius-button: 17px;
+        --radius-button-compact: 14px;
+      }
+      *, ::before, ::after { corner-shape: superellipse(1.5); }
+      .tabs-shell,
+      .tab,
+      .tabs.has-lens .tab::before,
+      .tab-lens,
+      .tab-lens::after,
+      .tab-lens-shadow,
+      .local-badge,
+      .local-badge::before,
+      .sample-tag,
+      .container-plan-tag,
+      .memo-list-flag,
+      .placeholder-mark,
+      .welcome-cover::before,
+      .app-dialog-close { corner-shape: round; }
     }
 
     @media (max-width: 900px) {

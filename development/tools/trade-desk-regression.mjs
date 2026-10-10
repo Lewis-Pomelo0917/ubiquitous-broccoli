@@ -665,9 +665,17 @@ for (const selector of ['.tab-lens', '.tab-lens.is-pressed']) {
   const shadow = rule.match(/box-shadow:\s*([^;]+);/)?.[1] || '';
   assert.ok(shadow && shadow.split(',').every((part) => part.trim().startsWith('inset')), `${selector} 只能用内阴影；外投影会让折射贴图偏移，应放在 .tab-lens-shadow`);
 }
-assert.match(html, /@supports \(corner-shape: squircle\)[\s\S]*corner-shape:\s*squircle;/);
-const squircleRule = html.match(/@supports \(corner-shape: squircle\)\s*\{([\s\S]*?)\}\s*\}/)?.[1] || '';
-assert.doesNotMatch(squircleRule, /\.tabs-wrap|\.tabs-shell|\.tab-lens|\.tab\s*[,\{]/, '导航玻璃胶囊不能继承面板方圆角');
+const cornerBlock = html.match(/@supports \(corner-shape: superellipse\(1\.5\)\) \{\n([\s\S]*?)\n    \}\n/)?.[1] || '';
+assert.match(cornerBlock, /\*, ::before, ::after \{ corner-shape: superellipse\(1\.5\); \}/);
+const roundCorners = new Set((cornerBlock.match(/([^{}]+)\{ corner-shape: round; \}/)?.[1] || '').split(',').map((part) => part.trim()));
+const finalRadius = new Map();
+for (const [, selectors, radius] of html.slice(html.indexOf('<style'), html.indexOf('</style>')).replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{[^{}]*?border-radius:\s*([^;]+);/g)) {
+  for (const selector of selectors.split(',')) finalRadius.set(selector.trim().replace(/\s+/g, ' '), radius.trim());
+}
+for (const [selector, radius] of finalRadius) {
+  if (/^(999px|50%|inherit)$/.test(radius)) assert.ok(roundCorners.has(selector), `${selector} 是胶囊或圆形，须保持 corner-shape: round；导航玻璃胶囊不能继承面板方圆角`);
+}
+for (const selector of ['.tabs-shell', '.tab', '.tab-lens', '.tab-lens-shadow']) assert.ok(roundCorners.has(selector), `${selector} 须保持胶囊圆端`);
 assert.match(html, /\.tab\.is-active \{[\s\S]*?font-weight: 500;/);
 assert.match(html, /\[t\.ready, t\.updateCallbackDone, t\.finished\]\.forEach/);
 assert.match(html, /handleViewTransitionRejection/);
