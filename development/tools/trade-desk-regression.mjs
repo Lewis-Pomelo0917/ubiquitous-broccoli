@@ -659,6 +659,12 @@ assert.match(html, /@media \(max-width: 900px\)[\s\S]*\.pantone-results \{ max-h
 
 assert.match(html, /class="tab-lens" aria-hidden="true"/);
 assert.match(html, /\.tabs\.has-lens \.tab\.is-preview/);
+assert.match(html, /class="tab-lens-shadow" aria-hidden="true"/);
+for (const selector of ['.tab-lens', '.tab-lens.is-pressed']) {
+  const rule = html.match(new RegExp(`\\n\\s*${selector.replace(/\./g, '\\.')} \\{([^}]*)\\}`))?.[1] || '';
+  const shadow = rule.match(/box-shadow:\s*([^;]+);/)?.[1] || '';
+  assert.ok(shadow && shadow.split(',').every((part) => part.trim().startsWith('inset')), `${selector} 只能用内阴影；外投影会让折射贴图偏移，应放在 .tab-lens-shadow`);
+}
 assert.match(html, /@supports \(corner-shape: squircle\)[\s\S]*corner-shape:\s*squircle;/);
 const squircleRule = html.match(/@supports \(corner-shape: squircle\)\s*\{([\s\S]*?)\}\s*\}/)?.[1] || '';
 assert.doesNotMatch(squircleRule, /\.tabs-wrap|\.tabs-shell|\.tab-lens|\.tab\s*[,\{]/, '导航玻璃胶囊不能继承面板方圆角');
