@@ -3253,16 +3253,6 @@
                 </div>
               </div>
 
-              <div class="amount-section">
-                <div class="section-heading"><h3>常用示例</h3><span class="section-meta">Quick examples</span></div>
-                <div class="amount-control-grid">
-                  <button class="btn" type="button" data-amount-example="1234.56">1,234.56</button>
-                  <button class="btn" type="button" data-amount-example="1000">1,000</button>
-                  <button class="btn" type="button" data-amount-example="0.05">0.05</button>
-                  <button class="btn" type="button" data-amount-example="-20.5">-20.50</button>
-                </div>
-              </div>
-
               <div class="amount-actions">
                 <span class="footnote">结果仅用于单据文字表达，请以合同币种和财务规则为准。</span>
                 <button class="btn mobile-result-jump" type="button" data-result-target=".amount-result-panel">查看结果</button>
@@ -4880,13 +4870,6 @@
       ['amount-value', 'amount-currency', 'amount-format', 'amount-case', 'amount-english', 'amount-rounding'].forEach((id) => {
         const element = document.getElementById(id);
         element.addEventListener(element.tagName === 'SELECT' ? 'change' : 'input', calculateAmount);
-      });
-      document.querySelectorAll('[data-amount-example]').forEach((button) => {
-        button.addEventListener('click', () => {
-          document.getElementById('amount-value').value = button.dataset.amountExample;
-          calculateAmount();
-          document.getElementById('amount-value').focus();
-        });
       });
       document.getElementById('amount-clear-btn').addEventListener('click', () => {
         document.getElementById('amount-form').reset();
