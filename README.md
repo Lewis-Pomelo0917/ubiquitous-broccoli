@@ -12,7 +12,7 @@ Trade Desk 面向处理 notebooks、exercise books、journals、planners 等纸�
 
 基本使用节奏是：填入当前任务所需参数，查看计算结果和提示，再复制结果或在明确的模块间带入。计算结果用于辅助核对；供应商实测、装箱记录、合同和承运要求仍是业务依据。
 
-录入时要保持单位口径清楚：外箱长宽高使用同一尺寸单位，产品单本净重、空箱及内包装重量、整票毛重分别处理。内页数量字段以页数输入，而厚度字段是每张纸的厚度；应按产品规格核实页、张与克重的关系。估算值后续可用供应商实测或包装记录复核，不要为了对齐旧单据而混用单位或随意改舍入方式。
+录入时要保持单位口径清楚：外箱长宽高使用同一尺寸单位，产品单本净重、空箱及内包装重量、整票毛重分别处理。本册进阶支持在“页/张”之间选择；选择页数时按双面关系折算纸张数，奇数页会提醒确认。内页克重与“每张厚度”仍按各自单位输入。估算值后续可用供应商实测或包装记录复核，不要为了对齐旧单据而混用单位或随意改舍入方式。
 
 ## 现有模块
 
@@ -20,7 +20,7 @@ Trade Desk 面向处理 notebooks、exercise books、journals、planners 等纸�
 | --- | --- | --- |
 | 主页 | 快捷打开七个工具页；“AI 观察”显示本地情报文件中当天最多三条事件，可按来源查看安全的网页链接。 | 读取应用旁的 `ai-intelligence.json`；不是云端聊天、联网搜索或应用内采集器。没有有效本地情报时会显示空态或错误提示。 |
 | 体积 / CBM | 输入外箱长宽高、统一尺寸单位、箱数、每箱本数、实际总本数和单本净重，查看单箱/整票 CBM 与净重；可复制结果。另有几何装箱辅助和 20GP、40GP、40HQ 方案估算。 | 几何装箱是参考，不覆盖主计算中的手工数量、总体积或毛重。装柜方案使用有效容积与 28,000 kg/柜经验载重基准，不自动组合混合柜型；道路、船公司、托盘、柜门和实际装载等限制须另行核实。净重不含包装，毛重应包括产品、内外包装及托盘。 |
-| 本册进阶 | 按成品尺寸、内页数量、纸种、克重/每张厚度、封面封底材质与厚度、装订方式及附加重量，估算单本厚度、体积和净重；重量以 kg 为主、g 为辅，可一键带入 CBM 的单本重量。 | 这是参数估算，不是称重或供应商规格证明。内页数量以 Page count 表示，厚度字段以每张 Caliper 表示；按产品规格核实页、张、克重和厚度口径。纸质封面可按克重估算，PP 可参考密度；其他非纸材质应使用实测数据。 |
+| 本册进阶 | 按成品尺寸、内页数量（页或张）、纸种、克重/每张厚度、封面封底材质与厚度、装订方式及附加重量，估算单本厚度、体积和净重；重量以 kg 为主、g 为辅，可一键带入 CBM 的单本重量。 | 这是参数估算，不是称重或供应商规格证明。页数按双面折算纸张数，奇数页需确认；厚度字段为每张 Caliper。纸质封面可按克重估算，PP 可参考密度；其他非纸材质应使用实测数据。 |
 | 金额英文 | 支持 USD、EUR、GBP、CNY、JPY、HKD、SGD、AUD、CAD、CHF、KRW；可选单据分数格式或完整英文、大小写、美式/英式英语，以及自动四舍五入或严格提示，并复制结果。另提供不带币种的整数英文大写。 | 这是金额文字表达工具，不验证合同、汇率或财务政策。小数位依币种设置；结果用于单据文字时，仍须按合同币种和公司财务规则复核。 |
 | 计算器 | 支持四则运算、括号、百分比、键盘输入、复制结果和最近八条历史记录；点击历史可重新载入算式。 | 百分比按独立百分数处理，例如 250 × 8% = 20。历史只保存在本机。 |
 | 潘通查询 | 从本地公开参考色数据中按色号或名称筛选，并按 C、U、Metallic C 系列查看色卡；详情显示 HEX、RGB、CMYK，可复制色号或 HEX。 | 屏幕换算颜色只用于快速沟通和初步对色。不同纸张、油墨、涂布和显示器会产生色差，不能替代实体色卡或印刷打样。 |
@@ -63,26 +63,26 @@ Trade Desk 面向处理 notebooks、exercise books、journals、planners 等纸�
 当前工程没有通用开发、打包或自动化测试脚本。仓库现有 Node 检查应从根目录运行：
 
 ```powershell
-node .\development\tools\directory-check.mjs
-node .\development\tools\trade-desk-regression.mjs
-node .\development\tools\gray-clay-blue-check.mjs
-node .\development\tools\always-on-top-check.mjs
+node ./development/tools/directory-check.mjs
+node ./development/tools/trade-desk-regression.mjs
+node ./development/tools/gray-clay-blue-check.mjs
+node ./development/tools/always-on-top-check.mjs
 ```
 
 对应入口：[目录检查](development/tools/directory-check.mjs)、[业务源码回归](development/tools/trade-desk-regression.mjs)、[主题资源检查](development/tools/gray-clay-blue-check.mjs)和[置顶权限检查](development/tools/always-on-top-check.mjs)。
 
-`directory-check.mjs` 核对完整本地工作区，包括根目录白名单、指定正式 EXE、配套 JSON 和 `work` 任务登记。仅含源码的 GitHub 克隆可能缺少这些分发/工作目录，因此该检查报缺项表示本地交付布局不完整，不等于前端源码错误。不要为了让检查变绿而制造 EXE、伪造任务归属或移除既有约束。`development/desktop/package.json` 的 `pretauri` 会在标准 `npm.cmd run tauri` 前执行同一目录检查；直接调用 Tauri CLI 或其他工具不受该钩子拦截。
+云端源码版 `directory-check.mjs` 核对根目录维护文档、`.gitignore`、Git 元数据、必要源码/配置/资源，并检查可选的 `work` 暂存任务登记；它不要求 `outputs/`、正式 EXE、`archive/` 或 `development/originals/`。它不会跟随链接目录或遍历依赖缓存。`development/desktop/package.json` 的 `pretauri` 会在标准 `npm run tauri` 前执行该检查；直接调用 Tauri CLI 或其他工具不受钩子拦截。
 
 云端可在实际提供的 Node、浏览器和依赖环境中运行适用的源码/页面检查；不要假定当前环境是 Windows，也不要假定 Rust、WebView2、浏览器自动化工具或联网依赖已安装。源码检查与浏览器交互检查应分开报告。浏览器预览不能证明 Windows 托盘、单实例、系统缩放或打包后 WebView2 表现；这些需要真实 Windows 环境验证。
 
-如获授权构建，先在专用 `work/<任务>/build/` 创建干净前端暂存，复制所需 HTML、脚本、Logo、字体和潘通资源，再为此次暂存准备独立 Tauri 合并配置。`frontendDist` 必须使用相对于 `development/desktop/src-tauri` 的路径并指向已核实的暂存 `frontend`，不可填入个人机器的盘符路径、`file:` 或 `http:` URL。核对配置解析后的目标、必要资源和暂存内容后，才能从 `development/desktop/` 调用现有脚本：
+如获授权构建，先在专用且由 `.gitignore` 排除的 `work/<任务>/` 下创建符合 `TASK.md` 格式的登记和干净 `build/frontend` 暂存，复制所需 HTML、脚本、Logo、字体和潘通资源，再准备只覆盖 `build.frontendDist` 的 Tauri 合并配置。`frontendDist` 必须使用相对于 `development/desktop/src-tauri` 的路径，例如 `../../../work/<任务>/build/frontend`；不可填入某台机器的盘符路径、`file:` 或 `http:` URL。核对配置解析后的目标、必要资源和暂存内容后，才能在 `development/desktop/` 运行：
 
-```powershell
-Set-Location .\development\desktop
-npm.cmd run tauri -- build --no-bundle --ci --config "<本次专用合并配置文件的完整路径>"
+```sh
+cd development/desktop
+npm run tauri -- build --no-bundle --ci --config "../../work/<任务>/build/tauri.frontend.json"
 ```
 
-尖括号内容是占位说明，必须在暂存和配置均已准备后替换。配套 AI JSON 在运行时由 Rust 从 EXE 同目录读取，应按交付流程作为旁置数据处理，不把 EXE、旧构建或用户备忘复制进前端暂存。
+命令中的 `<任务>` 是占位符，须换成实际任务目录名，并且只在暂存和配置都已准备、`frontendDist` 已正确解析后运行。是否能构建还取决于当前环境具备相应 Node/npm、Rust 和平台工具链。`ai-intelligence.json` 不随源码仓库提供；运行时 Rust 会从 EXE 同目录读取，缺少时首页情报显示不可用。不要把 EXE、旧构建或用户备忘复制进前端暂存或源码仓库。
 
 ## 数据与交付边界
 

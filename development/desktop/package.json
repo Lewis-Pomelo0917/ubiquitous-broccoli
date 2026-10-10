@@ -1,0 +1,13 @@
+{
+  "name": "trade-desk-desktop",
+  "private": true,
+  "version": "0.1.5-dev-0921",
+  "type": "module",
+  "scripts": {
+    "pretauri": "node ../tools/directory-check.mjs",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

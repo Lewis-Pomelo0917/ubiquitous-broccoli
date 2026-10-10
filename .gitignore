@@ -1,0 +1,45 @@
+# Node dependencies
+**/node_modules/
+
+# Rust and generated Tauri files
+**/target/
+**/gen/
+
+# Local distribution, originals, task staging and history
+/outputs/
+/development/originals/
+/work/
+/archive/
+/.codex-finalizer/
+
+# Binaries, logs, backups and generated previews
+*.exe
+*.msi
+*.msix
+*.appx
+*.dmg
+*.deb
+*.rpm
+*.AppImage
+*.pdb
+*.log
+*.bak
+*.tmp
+*.before-*
+**/build/
+**/delivery/
+**/screenshots/
+**/*.dSYM/
+*.validation.json
+
+# Local secrets and settings
+.env
+.env.*
+!.env.example
+*.local
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

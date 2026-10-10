@@ -1,0 +1,10 @@
+Trade Desk Noto Serif SC Medium is a character subset derived from Noto Serif SC.
+
+Copyright © 2017-2023 Adobe. Noto Serif SC production credits are retained in the font name table.
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+The license text is available at:
+https://scripts.sil.org/OFL
+
+This subset keeps the original copyright, license description, and license URL metadata.
+The family name and unique font name were changed for the modified subset.
