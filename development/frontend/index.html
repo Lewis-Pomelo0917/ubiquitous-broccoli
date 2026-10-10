@@ -2566,6 +2566,10 @@
         --radius-button-compact: 14px;
       }
       *, ::before, ::after { corner-shape: superellipse(1.5); }
+      /* Under half the chip height, so tags stay distinct from the round flag pills beside them. */
+      .memo-tag { border-radius: var(--radius-small); }
+      /* Tighter resizable corner keeps the native resize grip inside the curve. */
+      .memo-editor-textarea { border-end-end-radius: var(--radius-small); }
       .tabs-shell,
       .tab,
       .tabs.has-lens .tab::before,
