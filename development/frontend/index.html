@@ -2145,13 +2145,9 @@
       border: 1px solid var(--nav-rim);
       border-radius: 999px;
       background: var(--nav-bg);
-      box-shadow: 0 8px 22px var(--nav-shadow), inset 0 1px 1px #ffffff70, inset 0 -1px 1px #ffffff35, var(--nav-edge-start, 0 0 #0000), var(--nav-edge-end, 0 0 #0000);
+      box-shadow: 0 8px 22px var(--nav-shadow), inset 0 1px 1px #ffffff70, inset 0 -1px 1px #ffffff35;
       pointer-events: none;
-      transition: box-shadow 180ms ease;
     }
-    /* Narrow windows: shade the rail end that still hides tabs. */
-    .tabs-wrap.can-scroll-start { --nav-edge-start: inset 22px 0 16px -16px var(--nav-shadow); }
-    .tabs-wrap.can-scroll-end { --nav-edge-end: inset -22px 0 16px -16px var(--nav-shadow); }
     .tabs-viewport {
       position: relative;
       padding: 18px 5px;
@@ -2188,37 +2184,23 @@
     .tab.is-active { background: var(--thumb-bg); color: var(--accent-hover); font-weight: 500; }
     .tabs.has-lens .tab.is-active { background: transparent; color: var(--text); }
     .tabs.has-lens .tab.is-preview { color: var(--accent-hover); }
-    /* Hover pill sits where the resting lens would, so the target is clear before pressing. */
-    .tabs.has-lens .tab::before { content: ""; position: absolute; inset: 8px 4px; z-index: -1; border-radius: inherit; background: var(--btn-hover); opacity: 0; transition: opacity 160ms ease; pointer-events: none; }
-    .tabs.has-lens .tab:hover::before { opacity: .7; }
-    .tabs.has-lens .tab.is-preview::before,
-    .tabs.is-dragging .tab::before { opacity: 0; }
-    .tabs.is-scrubbing,
-    .tabs.is-scrubbing .tab { cursor: grabbing; }
-    .tab-lens,
-    .tab-lens-shadow {
+    .tab-lens {
       position: absolute;
       left: 0;
       top: 0;
+      z-index: 3;
       width: 90px;
       height: 48px;
+      border: 1px solid var(--nav-rim);
       border-radius: 999px;
+      background: var(--thumb-bg);
+      box-shadow: inset 0 1px 2px #ffffff99, inset 0 -1px 1px #ffffff75, 0 3px 8px var(--nav-shadow);
       pointer-events: none;
       transform-origin: center;
       will-change: transform;
     }
-    .tab-lens {
-      z-index: 3;
-      border: 1px solid var(--nav-rim);
-      background: var(--thumb-bg);
-      box-shadow: inset 0 1px 2px #ffffff99, inset 0 -1px 1px #ffffff75;
-    }
-    /* The drop shadow lives on its own layer: an outer shadow on the lens would grow its
-       composited bounds and push the refraction map off-centre. */
-    .tab-lens-shadow { z-index: 2; box-shadow: 0 3px 8px var(--nav-shadow); transition: box-shadow 180ms ease; }
-    .tab-lens-shadow.is-pressed { box-shadow: 0 10px 22px var(--nav-shadow), 0 2px 5px var(--nav-shadow); }
     .tab-lens::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(150deg, #ffffff28, transparent 32%, transparent 66%, #ffffff20); pointer-events: none; }
-    .tab-lens.is-pressed { box-shadow: inset 1px 1px 2px #ffffff99, inset -1px -1px 1px #ffffff90; }
+    .tab-lens.is-pressed { box-shadow: inset 1px 1px 2px #ffffff99, inset -1px -1px 1px #ffffff90, 0 8px 18px var(--nav-shadow); }
     .tab-lens-filters { position: absolute; width: 0; height: 0; pointer-events: none; }
     @supports (backdrop-filter: blur(1px)) {
       .tabs-shell { background: var(--nav-glass); backdrop-filter: blur(3px) saturate(1.12); }
@@ -2583,14 +2565,6 @@
       .advanced-actions > .footnote,
       .amount-actions > .footnote { flex: 1 1 100%; }
     }
-    /* Down to the 640px window minimum, keep the sticky header on one row so tools keep their height. */
-    @media (min-width: 561px) and (max-width: 820px) {
-      .app-header { gap: 12px; }
-      .brand { flex: 1 1 auto; min-width: 0; }
-      .brand > div { min-width: 0; }
-      .brand-caption { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .header-side { flex: 0 0 auto; flex-wrap: nowrap; }
-    }
     @media (max-width: 560px) {
       .app { width: calc(100% - 24px); }
       .app-chrome { padding-top: 17px; }
@@ -2670,7 +2644,6 @@
           <button class="tab" id="tab-world-clock" type="button" role="tab" aria-selected="false" aria-controls="view-world-clock" data-view="world-clock">世界时钟</button>
           <button class="tab" id="tab-memo" type="button" role="tab" aria-selected="false" aria-controls="view-memo" data-view="memo">备忘录</button>
         </div></div>
-        <div class="tab-lens-shadow" aria-hidden="true" hidden></div>
         <div class="tab-lens" aria-hidden="true" hidden></div>
       </nav>
     </div>
@@ -6427,311 +6400,73 @@
       if (supportsViewTransitions) document.documentElement.classList.add('has-view-transitions');
 
       const tabLens = (() => {
-        const tabs = tabButtons;
-        const track = tabsRail;
-        const viewport = document.querySelector('.tabs-viewport');
-        const lens = document.querySelector('.tab-lens');
-        const halo = document.querySelector('.tab-lens-shadow');
-        const nav = lens.parentElement;
-        const filter = document.querySelector('#tab-lens-refraction');
-        const displacement = document.querySelector('#tab-lens-displacement');
-        const mapImage = document.querySelector('#tab-lens-map');
-        const reduce = reducedMotion;
-        // Geometry in CSS px: tab row, resting pill and pressed lens.
-        const TAB_H = 64, REST_H = 48, PRESS_H = 72, REST_INSET = 4, PRESS_GROW = 18;
-        // Refraction: rim bezel width, strongest rim shift and the map's encoding range.
-        const BEZEL = 16, RIM_SHIFT = 10, MAP_RANGE = 16;
-        // Labels swell under the pressed lens; the lens stretches along fast motion.
-        const LABEL_ZOOM = .1, STRETCH = .14, EDGE_ZONE = 40, EDGE_SPEED = 900;
-        const maps = new Map();
-        const labelZoom = tabs.map(() => '');
-        const idle = (fn) => (window.requestIdleCallback ? window.requestIdleCallback(fn) : setTimeout(fn, 60));
-        let rects = [], selected = activeTabIndex, preview = activeTabIndex, drag = null;
-        let raf = 0, lastTime = 0, suppressClick = false, mapKey = 0, drawn = '';
-        let state = { cx: 0, w: 100, h: REST_H }, velocity = { cx: 0, w: 0, h: 0 }, target = { ...state }, strength = 0;
+        const tabs=tabButtons,track=tabsRail,viewport=document.querySelector('.tabs-viewport'),lens=document.querySelector('.tab-lens'),nav=lens.parentElement;
+        const displacement=document.querySelector('#tab-lens-displacement'),mapImage=document.querySelector('#tab-lens-map'),reduce=reducedMotion;
+ let selected=activeTabIndex,preview=activeTabIndex,drag=null,raf=0,lastTime=0,lastMapRatio=0,suppressClick=false;
+ let state={x:0,w:100,h:48},velocity={x:0,w:0,h:0},target={...state},strength=0;
+ const bounds=()=>{const left=track.getBoundingClientRect().left;return tabs.map(b=>{const r=b.getBoundingClientRect();return{x:r.left-left,w:r.width}})};
+ const nearest=(x)=>{const b=bounds();return b.reduce((best,r,i)=>Math.abs(r.x+r.w/2-x)<Math.abs(b[best].x+b[best].w/2-x)?i:best,0)};
+ function paintPreview(i){preview=i;tabs.forEach((b,j)=>b.classList.toggle('is-preview',j===i));}
+ function commit(i,focus=false){selected=i;paintPreview(i);activateView(tabs[i],i);if(focus)tabs[i].focus();}
+ function makeMap(w,h){
+  const ratio=w/h;if(Math.abs(ratio-lastMapRatio)<.08)return;lastMapRatio=ratio;
+  const canvas=document.createElement('canvas');canvas.width=Math.round(96*ratio);canvas.height=96;
+  const ctx=canvas.getContext('2d'),im=ctx.createImageData(canvas.width,canvas.height),W=canvas.width,H=canvas.height,R=H/2,straight=Math.max(0,(W-H)/2);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+   const px=x+.5-W/2,py=y+.5-H/2,qx=Math.max(Math.abs(px)-straight,0),r=Math.hypot(qx,py),t=Math.min(1,r/R);
+   const edge=Math.pow(Math.max(0,(t-.5)/.5),1.6),nx=r?Math.sign(px)*qx/r:0,ny=r?py/r:0;
+   const dx=-px*.18*(1-edge)-nx*13*edge,dy=-py*.22*(1-edge)-ny*15*edge;
+   const i=(y*W+x)*4;im.data[i]=Math.max(0,Math.min(255,128+dx/48*255));im.data[i+1]=Math.max(0,Math.min(255,128+dy/48*255));im.data[i+2]=128;im.data[i+3]=255;
+  }
+  ctx.putImageData(im,0,0);mapImage.setAttribute('href',canvas.toDataURL());
+ }
+ function draw(){
+  const h=state.h,trackRect=track.getBoundingClientRect(),navRect=nav.getBoundingClientRect(),x=trackRect.left-navRect.left+state.x,y=trackRect.top-navRect.top+(64-h)/2;
+  lens.style.width=state.w+'px';lens.style.height=h+'px';lens.style.transform=`translate3d(${x}px,${y}px,0)`;
+  lens.style.visibility=x+state.w<0||x>nav.clientWidth?'hidden':'visible';
+  const filter=document.querySelector('#tab-lens-refraction');filter.setAttribute('width',String(state.w));filter.setAttribute('height',String(h));mapImage.setAttribute('width',String(state.w));mapImage.setAttribute('height',String(h));
+  makeMap(state.w,h);displacement.setAttribute('scale',String(strength));
+ }
+ function tick(now){
+  const elapsed=now-(lastTime||now-16),dt=Math.min(.032,Math.max(.001,elapsed/1000));lastTime=now;
+  let moving=false;
+  for(const k of ['x','w','h']){if(reduce.matches){state[k]=target[k];velocity[k]=0}else{velocity[k]+=(target[k]-state[k])*380*dt;velocity[k]*=Math.exp(-28*dt);state[k]+=velocity[k]*dt;if(Math.abs(target[k]-state[k])>.05||Math.abs(velocity[k])>.15)moving=true;else{state[k]=target[k];velocity[k]=0}}}
+  const goal=drag?(reduce.matches?15:48):0;strength+=(goal-strength)*Math.min(1,dt*19);if(Math.abs(goal-strength)>.08)moving=true;else strength=goal;
+  draw();raf=moving?requestAnimationFrame(tick):0;if(!raf)lastTime=0;
+ }
+ function animate(){if(!raf){lastTime=0;raf=requestAnimationFrame(tick)}}
+ function rest(instant=false){const r=bounds()[selected];target={x:r.x+4,w:r.w-8,h:48};lens.classList.remove('is-pressed');if(instant){state={...target};velocity={x:0,w:0,h:0};strength=0;draw()}else animate();}
+ function aim(clientX){
+  const x=clientX-track.getBoundingClientRect().left,b=bounds(),i=nearest(x);paintPreview(i);
+  const bound=Math.max(b[0].x+b[0].w/2,Math.min(b.at(-1).x+b.at(-1).w/2,x)),overflow=x-bound;
+  const navRect=nav.getBoundingClientRect(),margin=Math.min(navRect.left,window.innerWidth-navRect.right);
+  const limit=Math.min(16,Math.max(4,margin-5));
+  const pull=reduce.matches?0:Math.sign(overflow)*limit*(1-Math.exp(-Math.abs(overflow)/48));
+  const center=bound+pull,width=b[i].w+18;
+  target={x:center-width/2,w:width,h:72};animate();
+ }
+ function finish(cancel=false){if(!drag)return;const pointerId=drag.id;drag=null;suppressClick=true;if(track.hasPointerCapture(pointerId))track.releasePointerCapture(pointerId);if(!cancel)commit(preview);else{paintPreview(selected);}rest();}
+ track.addEventListener('pointerdown',e=>{
+  if(e.button!==0||!e.isPrimary||!e.target.closest('.tab'))return;
+  drag={id:e.pointerId,startX:e.clientX};suppressClick=false;track.setPointerCapture(e.pointerId);lens.classList.add('is-pressed');aim(e.clientX);
+ });
+ track.addEventListener('pointermove',e=>{if(!drag||drag.id!==e.pointerId)return;if(Math.abs(e.clientX-drag.startX)>4)suppressClick=true;const r=viewport.getBoundingClientRect();if(e.clientX<r.left+25)viewport.scrollLeft-=12;else if(e.clientX>r.right-25)viewport.scrollLeft+=12;aim(e.clientX);});
+ track.addEventListener('pointerup',e=>{if(drag?.id===e.pointerId){suppressClick=true;finish();}});
+ track.addEventListener('pointercancel',()=>finish(true));track.addEventListener('lostpointercapture',()=>{if(drag)finish(true)});
+ // Keep the overlay aligned without letting its expansion change scrollWidth.
+ viewport.addEventListener('scroll',draw,{passive:true});
+ tabs.forEach((b,i)=>{
+  b.addEventListener('click',e=>{if(suppressClick&&e.detail>0){suppressClick=false;return;}commit(i);rest();});
+  b.addEventListener('keydown',e=>{let next=i;if(e.key==='ArrowRight')next=(i+1)%tabs.length;else if(e.key==='ArrowLeft')next=(i+tabs.length-1)%tabs.length;else if(e.key==='Home')next=0;else if(e.key==='End')next=tabs.length-1;else return;e.preventDefault();finish(true);commit(next,true);tabs[next].scrollIntoView({block:'nearest',inline:'nearest'});rest();});
+ });
+ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&drag){e.preventDefault();finish(true)}});window.addEventListener('blur',()=>finish(true));
 
-        // Layout offsets ignore the label zoom transforms, so they stay valid mid-press.
-        const measure = () => { rects = tabs.map((b) => ({ x: b.offsetLeft, w: b.offsetWidth })); };
-        const center = (i) => rects[i].x + rects[i].w / 2;
-        const nearest = (x) => rects.reduce((best, r, i) => (Math.abs(center(i) - x) < Math.abs(center(best) - x) ? i : best), 0);
-        const canScroll = () => viewport.scrollWidth - viewport.clientWidth > 1;
-
-        function buildMap(W, H) {
-          const R = H / 2, straight = Math.max(0, (W - H) / 2);
-          const canvas = document.createElement('canvas');
-          canvas.width = W;
-          canvas.height = H;
-          const ctx = canvas.getContext('2d'), image = ctx.createImageData(W, H), data = image.data;
-          for (let y = 0; y < H; y++) {
-            for (let x = 0; x < W; x++) {
-              const px = x + .5 - W / 2, py = y + .5 - H / 2;
-              const qx = Math.max(Math.abs(px) - straight, 0), r = Math.hypot(qx, py), depth = R - r;
-              let dx = 0, dy = 0;
-              // Only the rim bends light outward; the flat centre stays sharp so the label remains legible.
-              if (r > 0 && depth > 0 && depth < BEZEL) {
-                const shift = RIM_SHIFT * Math.pow(1 - depth / BEZEL, 2.4);
-                dx = Math.sign(px) * qx / r * shift;
-                dy = py / r * shift;
-              }
-              const i = (y * W + x) * 4;
-              data[i] = 128 + dx / MAP_RANGE * 127;
-              data[i + 1] = 128 + dy / MAP_RANGE * 127;
-              data[i + 2] = 128;
-              data[i + 3] = 255;
-            }
-          }
-          ctx.putImageData(image, 0, 0);
-          return canvas.toDataURL();
-        }
-        // One map per pressed width (eight tabs), built once and reused instead of per frame.
-        function mapFor(width) {
-          const w = Math.max(PRESS_H, Math.round(width / 2) * 2);
-          if (!maps.has(w)) maps.set(w, buildMap(w, PRESS_H));
-          return w;
-        }
-        function useMap(width) {
-          const w = mapFor(width);
-          if (w === mapKey) return;
-          mapKey = w;
-          mapImage.setAttribute('href', maps.get(w));
-        }
-        function warmMaps() {
-          const pending = rects.map((r) => r.w + PRESS_GROW);
-          const next = () => { if (pending.length) { mapFor(pending.shift()); idle(next); } };
-          idle(next);
-        }
-
-        function paintPreview(i) {
-          preview = i;
-          tabs.forEach((b, j) => b.classList.toggle('is-preview', j === i));
-        }
-        function ensureVisible(i, instant = false) {
-          if (!canScroll()) return;
-          const pad = 28, start = track.offsetLeft + rects[i].x - pad, end = start + rects[i].w + pad * 2;
-          const view = viewport.scrollLeft, width = viewport.clientWidth;
-          const next = start < view ? start : end > view + width ? end - width : view;
-          if (next !== view) viewport.scrollTo({ left: next, behavior: instant || reduce.matches ? 'auto' : 'smooth' });
-        }
-        function commit(i, focus = false) {
-          selected = i;
-          paintPreview(i);
-          activateView(tabs[i], i);
-          if (focus) tabs[i].focus({ preventScroll: true });
-          ensureVisible(i);
-        }
-        function syncEdges() {
-          const max = viewport.scrollWidth - viewport.clientWidth;
-          nav.classList.toggle('can-scroll-start', max > 1 && viewport.scrollLeft > 1);
-          nav.classList.toggle('can-scroll-end', max > 1 && viewport.scrollLeft < max - 1);
-        }
-
-        function draw() {
-          const trackRect = track.getBoundingClientRect(), navRect = nav.getBoundingClientRect();
-          const left = trackRect.left - navRect.left + state.cx - state.w / 2;
-          const top = trackRect.top - navRect.top + (TAB_H - state.h) / 2;
-          // Squash and stretch along the direction of travel, like a drop of liquid.
-          const stretch = reduce.matches ? 0 : STRETCH * (1 - Math.exp(-Math.abs(velocity.cx) / 1200));
-          const transform = `translate3d(${left}px,${top}px,0) scale(${(1 + stretch).toFixed(4)},${(1 - stretch * .5).toFixed(4)})`;
-          lens.style.width = halo.style.width = `${state.w}px`;
-          lens.style.height = halo.style.height = `${state.h}px`;
-          lens.style.transform = halo.style.transform = transform;
-          // A scrolled rail can carry the selected tab past the shell; trim the lens there.
-          const offscreen = left + state.w < 0 || left > nav.clientWidth;
-          const cutStart = canScroll() ? Math.max(0, -left) : 0, cutEnd = canScroll() ? Math.max(0, left + state.w - nav.clientWidth) : 0;
-          lens.style.visibility = offscreen ? 'hidden' : 'visible';
-          halo.style.visibility = offscreen || cutStart || cutEnd ? 'hidden' : 'visible';
-          lens.style.clipPath = cutStart || cutEnd ? `inset(0 ${cutEnd}px 0 ${cutStart}px)` : '';
-          const scale = (MAP_RANGE * 2 * strength).toFixed(2), size = `${state.w}|${state.h}|${scale}`;
-          if (size !== drawn) {
-            drawn = size;
-            for (const el of [filter, mapImage]) {
-              el.setAttribute('width', String(state.w));
-              el.setAttribute('height', String(state.h));
-            }
-            displacement.setAttribute('scale', scale);
-          }
-          // Labels swell as the pressed lens passes over them; vector text stays crisp.
-          tabs.forEach((b, j) => {
-            const near = Math.max(0, 1 - Math.abs(center(j) - state.cx) / (state.w * .62));
-            const zoom = 1 + LABEL_ZOOM * strength * near * near * (3 - 2 * near);
-            const value = zoom > 1.001 ? `scale(${zoom.toFixed(3)})` : '';
-            if (value !== labelZoom[j]) {
-              b.style.transform = value;
-              labelZoom[j] = value;
-            }
-          });
-        }
-        function edgeScroll(dt) {
-          if (!canScroll()) return false;
-          const r = viewport.getBoundingClientRect();
-          const into = drag.x < r.left + EDGE_ZONE ? (drag.x - r.left) / EDGE_ZONE - 1 : drag.x > r.right - EDGE_ZONE ? 1 - (r.right - drag.x) / EDGE_ZONE : 0;
-          if (!into) return false;
-          const before = viewport.scrollLeft;
-          viewport.scrollLeft = before + Math.sign(into) * Math.min(1, Math.abs(into)) * EDGE_SPEED * dt;
-          if (Math.abs(viewport.scrollLeft - before) < .5) return false;
-          aim(drag.x);
-          return true;
-        }
-        function tick(now) {
-          const dt = Math.min(.032, Math.max(.001, (now - (lastTime || now - 16)) / 1000));
-          lastTime = now;
-          // Edge auto-scroll waits for a real drag so a plain click near the rim never shifts the rail.
-          let moving = drag?.moved ? edgeScroll(dt) : false;
-          for (const k of ['cx', 'w', 'h']) {
-            if (reduce.matches) {
-              state[k] = target[k];
-              velocity[k] = 0;
-              continue;
-            }
-            velocity[k] += (target[k] - state[k]) * 380 * dt;
-            velocity[k] *= Math.exp(-28 * dt);
-            state[k] += velocity[k] * dt;
-            if (Math.abs(target[k] - state[k]) > .05 || Math.abs(velocity[k]) > .15) moving = true;
-            else {
-              state[k] = target[k];
-              velocity[k] = 0;
-            }
-          }
-          const goal = drag ? (reduce.matches ? .35 : 1) : 0;
-          strength = reduce.matches ? goal : strength + (goal - strength) * Math.min(1, dt * 16);
-          if (Math.abs(goal - strength) > .002) moving = true;
-          else strength = goal;
-          draw();
-          raf = moving ? requestAnimationFrame(tick) : 0;
-          if (!raf) lastTime = 0;
-        }
-        function animate() {
-          if (!raf) {
-            lastTime = 0;
-            raf = requestAnimationFrame(tick);
-          }
-        }
-        function setPressed(on) {
-          lens.classList.toggle('is-pressed', on);
-          halo.classList.toggle('is-pressed', on);
-        }
-        function rest(instant = false) {
-          const r = rects[selected];
-          target = { cx: r.x + r.w / 2, w: r.w - REST_INSET * 2, h: REST_H };
-          setPressed(false);
-          if (instant) {
-            state = { ...target };
-            velocity = { cx: 0, w: 0, h: 0 };
-            strength = 0;
-            draw();
-          } else animate();
-        }
-        function aim(clientX) {
-          const x = clientX - track.getBoundingClientRect().left, i = nearest(x);
-          paintPreview(i);
-          const bound = Math.max(center(0), Math.min(center(tabs.length - 1), x)), overflow = x - bound;
-          const navRect = nav.getBoundingClientRect(), margin = Math.min(navRect.left, window.innerWidth - navRect.right);
-          const limit = Math.min(16, Math.max(4, margin - 5));
-          const pull = reduce.matches ? 0 : Math.sign(overflow) * limit * (1 - Math.exp(-Math.abs(overflow) / 48));
-          const width = rects[i].w + PRESS_GROW;
-          target = { cx: bound + pull, w: width, h: PRESS_H };
-          useMap(width);
-          animate();
-        }
-        function finish(cancel = false) {
-          if (!drag) return;
-          const pointerId = drag.id;
-          drag = null;
-          suppressClick = true;
-          track.classList.remove('is-dragging', 'is-scrubbing');
-          if (track.hasPointerCapture(pointerId)) track.releasePointerCapture(pointerId);
-          if (cancel) paintPreview(selected);
-          else commit(preview, tabs.includes(document.activeElement));
-          rest();
-        }
-
-        track.addEventListener('pointerdown', (e) => {
-          if (e.button !== 0 || !e.isPrimary || !e.target.closest('.tab')) return;
-          measure();
-          drag = { id: e.pointerId, startX: e.clientX, x: e.clientX, moved: false };
-          suppressClick = false;
-          track.setPointerCapture(e.pointerId);
-          track.classList.add('is-dragging');
-          setPressed(true);
-          aim(e.clientX);
-        });
-        track.addEventListener('pointermove', (e) => {
-          if (!drag || drag.id !== e.pointerId) return;
-          drag.x = e.clientX;
-          if (!drag.moved && Math.abs(e.clientX - drag.startX) > 4) {
-            drag.moved = suppressClick = true;
-            track.classList.add('is-scrubbing');
-          }
-          aim(e.clientX);
-        });
-        track.addEventListener('pointerup', (e) => { if (drag?.id === e.pointerId) finish(); });
-        track.addEventListener('pointercancel', () => finish(true));
-        track.addEventListener('lostpointercapture', () => { if (drag) finish(true); });
-        // Keep the overlay aligned without letting its expansion change scrollWidth.
-        viewport.addEventListener('scroll', () => { draw(); syncEdges(); }, { passive: true });
-        // A plain mouse wheel scrolls the rail sideways when tabs overflow a narrow window.
-        viewport.addEventListener('wheel', (e) => {
-          if (e.ctrlKey || drag || !canScroll() || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
-          const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? viewport.clientWidth : 1;
-          const max = viewport.scrollWidth - viewport.clientWidth;
-          const next = Math.max(0, Math.min(max, viewport.scrollLeft + e.deltaY * unit));
-          if (Math.abs(next - viewport.scrollLeft) < 1) return;
-          e.preventDefault();
-          viewport.scrollLeft = next;
-        }, { passive: false });
-        tabs.forEach((b, i) => {
-          b.addEventListener('click', (e) => {
-            if (suppressClick && e.detail > 0) {
-              suppressClick = false;
-              return;
-            }
-            commit(i);
-            rest();
-          });
-          b.addEventListener('keydown', (e) => {
-            let next = i;
-            if (e.key === 'ArrowRight') next = (i + 1) % tabs.length;
-            else if (e.key === 'ArrowLeft') next = (i + tabs.length - 1) % tabs.length;
-            else if (e.key === 'Home') next = 0;
-            else if (e.key === 'End') next = tabs.length - 1;
-            else return;
-            e.preventDefault();
-            finish(true);
-            commit(next, true);
-            rest();
-          });
-        });
-        document.addEventListener('keydown', (e) => {
-          if (e.key === 'Escape' && drag) {
-            e.preventDefault();
-            finish(true);
-          }
-        });
-        window.addEventListener('blur', () => finish(true));
-
-        const sync = (tab, instant = false) => {
-          const i = tabs.indexOf(tab);
-          if (i < 0) return;
-          finish(true);
-          measure();
-          selected = i;
-          paintPreview(i);
-          tabs.forEach((b, j) => { b.tabIndex = j === i ? 0 : -1; });
-          rest(instant);
-          syncEdges();
-        };
-        new ResizeObserver(() => {
-          sync(tabs[activeTabIndex], true);
-          ensureVisible(activeTabIndex, true);
-          warmMaps();
-        }).observe(track);
-        reduce.addEventListener('change', () => sync(tabs[activeTabIndex], true));
-        document.addEventListener('visibilitychange', () => { if (document.hidden) finish(true); });
-        track.classList.add('has-lens');
-        lens.hidden = false;
-        halo.hidden = false;
-        sync(tabs[activeTabIndex], true);
-        return { sync };
+        const sync=(tab,instant=false)=>{const i=tabs.indexOf(tab);if(i<0)return;finish(true);selected=i;paintPreview(i);tabs.forEach((b,j)=>{b.tabIndex=j===i?0:-1});rest(instant);};
+        new ResizeObserver(()=>sync(tabs[activeTabIndex],true)).observe(track);
+        reduce.addEventListener('change',()=>sync(tabs[activeTabIndex],true));
+        document.addEventListener('visibilitychange',()=>{if(document.hidden)finish(true)});
+        track.classList.add('has-lens');lens.hidden=false;sync(tabs[activeTabIndex],true);
+        return {sync};
       })();
       const syncTabIndicator = (tab) => tabLens.sync(tab);
       window.addEventListener('resize', () => syncTabIndicator(tabButtons[activeTabIndex]), { passive: true });
