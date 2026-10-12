@@ -13,6 +13,7 @@ const sourceFiles = [
   'development/frontend/index.html',
   'development/frontend/pantone-data.js',
   'development/frontend/trade-desk-logo.svg',
+  'development/frontend/trade-desk-logo-dark.svg',
   'development/frontend/trade-desk-logo.png',
   'development/frontend/fonts/TradeDeskNotoSerifSC-Medium.ttf',
   'development/frontend/fonts/OFL-1.1.txt',
@@ -175,7 +176,7 @@ async function inspectLayout(root) {
     for (const name of ['frontend', 'desktop', 'tools']) safe.set(name, await safeDirectory(`development/${name}`));
     if (safe.get('frontend')) {
       const fonts = await safeDirectory('development/frontend/fonts');
-      for (const file of ['index.html', 'pantone-data.js', 'trade-desk-logo.svg', 'trade-desk-logo.png']) await safeFile(`development/frontend/${file}`);
+      for (const file of ['index.html', 'pantone-data.js', 'trade-desk-logo.svg', 'trade-desk-logo-dark.svg', 'trade-desk-logo.png']) await safeFile(`development/frontend/${file}`);
       if (fonts) {
         await safeFile('development/frontend/fonts/TradeDeskNotoSerifSC-Medium.ttf');
         await safeFile('development/frontend/fonts/OFL-1.1.txt');
@@ -220,7 +221,7 @@ async function selfTest() {
   const files = [
     ...rootFiles,
     'development/frontend/index.html', 'development/frontend/pantone-data.js',
-    'development/frontend/trade-desk-logo.svg', 'development/frontend/trade-desk-logo.png',
+    'development/frontend/trade-desk-logo.svg', 'development/frontend/trade-desk-logo-dark.svg', 'development/frontend/trade-desk-logo.png',
     'development/frontend/fonts/TradeDeskNotoSerifSC-Medium.ttf', 'development/frontend/fonts/OFL-1.1.txt',
     'development/desktop/package.json', 'development/desktop/package-lock.json', 'development/desktop/.gitignore',
     'development/desktop/src-tauri/Cargo.toml', 'development/desktop/src-tauri/Cargo.lock',

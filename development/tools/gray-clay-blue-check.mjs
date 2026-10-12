@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const html = await readFile(join(root, 'development', 'frontend', 'index.html'), 'utf8');
 const svg = await readFile(join(root, 'development', 'frontend', 'trade-desk-logo.svg'), 'utf8');
+const svgDark = await readFile(join(root, 'development', 'frontend', 'trade-desk-logo-dark.svg'), 'utf8');
 const font = await stat(join(root, 'development', 'frontend', 'fonts', 'TradeDeskNotoSerifSC-Medium.ttf'));
 
 for (const value of ['#F7F5F0', '#FFFEFB', '#F0EFE9', '#2E3336', '#696D67', '#D8D8D0', '#587786', '#496574', '#E8EEF0']) {
@@ -27,7 +28,8 @@ assert.equal(glintBlocks.length, 1, '仅允许已验收透镜内部的单一光�
 assert.match(glintBlocks[0], /\.tab-lens::after\s*\{/);
 assert.doesNotMatch(html.replace(glintBlocks[0], ''), /linear-gradient|radial-gradient/i);
 assert.doesNotMatch(html, /TD-APPLE|Apple-inspired/i);
-assert.doesNotMatch(svg, /<image\b|<filter\b|data:image\//i, 'Logo 必须为不含位图或模糊滤镜的矢量资源');
+for (const mark of [svg, svgDark]) assert.doesNotMatch(mark, /<image\b|<filter\b|data:image\//i, 'Logo 必须为不含位图或模糊滤镜的矢量资源');
+assert.match(html, /<img class="brand-logo-dark" src="\.\/trade-desk-logo-dark\.svg"/, '深色主题须显示深色版 Logo');
 assert.ok(font.size > 1000, '标题字体文件为空');
 
 console.log('PASS: gray-clay-blue theme, layout, logo and font checks');

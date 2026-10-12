@@ -2094,6 +2094,13 @@
       overflow: visible;
     }
     .brand-mark img { display: block; width: 100%; height: 100%; }
+    .brand-mark .brand-logo-dark { display: none; }
+    html[data-theme="dark"] .brand-mark .brand-logo { display: none; }
+    html[data-theme="dark"] .brand-mark .brand-logo-dark { display: block; }
+    @media (prefers-color-scheme: dark) {
+      html:not([data-theme="light"]) .brand-mark .brand-logo { display: none; }
+      html:not([data-theme="light"]) .brand-mark .brand-logo-dark { display: block; }
+    }
     .brand-name {
       font-family: var(--font-display);
       font-size: 18px;
@@ -2674,7 +2681,7 @@
     <div class="app-chrome">
       <header class="app-header">
         <div class="brand">
-          <div class="brand-mark" aria-hidden="true"><img src="./trade-desk-logo.svg" alt=""></div>
+          <div class="brand-mark" aria-hidden="true"><img class="brand-logo" src="./trade-desk-logo.svg" alt=""><img class="brand-logo-dark" src="./trade-desk-logo-dark.svg" alt=""></div>
           <div>
             <h1 class="brand-name">Cubic</h1>
             <p class="brand-caption">外贸实用工具 · notebook &amp; export helpers</p>
