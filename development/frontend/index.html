@@ -1311,6 +1311,12 @@
       font-size: 10px;
     }
 
+    .pantone-more {
+      grid-column: 1 / -1;
+      justify-self: center;
+      margin-top: 4px;
+    }
+
     .pantone-empty {
       grid-column: 1 / -1;
       padding: 46px 12px;
@@ -3401,9 +3407,9 @@
               <div>
                 <p class="eyebrow">05 · Pantone</p>
                 <h2 class="panel-title" id="pantone-title">潘通查询</h2>
-                <p class="panel-subtitle">按色号或名称快速筛选 2,983 条公开参考色，点击色卡查看数值。</p>
+                <p class="panel-subtitle">按色号或名称快速筛选 <span data-pantone-total>3,283</span> 条公开参考色，点击色卡查看数值。</p>
               </div>
-              <span class="sample-tag">2,983 条参考</span>
+              <span class="sample-tag"><span data-pantone-total>3,283</span> 条参考</span>
             </div>
             <div class="pantone-body">
               <div class="pantone-toolbar">
@@ -4975,7 +4981,7 @@
         U: 'Pantone Solid Uncoated · U',
         MC: 'Pantone Metallic · C'
       };
-      const pantoneDisplayLimit = 120;
+      const pantoneBatchSize = 120;
       const pantoneSearchElement = document.getElementById('pantone-search');
       const pantoneSeriesElement = document.getElementById('pantone-series');
       const pantoneResultsElement = document.getElementById('pantone-results');
@@ -5068,26 +5074,45 @@
         pantoneCopyHexButton.disabled = !hasItem;
       };
 
-      const renderPantoneResults = () => {
-        const matches = getPantoneMatches();
-        const visibleMatches = matches.slice(0, pantoneDisplayLimit);
-        pantoneResultsElement.innerHTML = '';
-        pantoneCountElement.textContent = matches.length > pantoneDisplayLimit
-          ? `匹配 ${matches.length} 个 · 显示前 ${pantoneDisplayLimit} 个，请继续输入缩小范围`
-          : matches.length ? `显示 ${matches.length} 个色号` : '未找到匹配色号';
-        if (!matches.length) {
-          const empty = document.createElement('div');
-          empty.className = 'pantone-empty';
-          empty.textContent = '换个色号、英文名称，或切换色卡系列试试。';
-          pantoneResultsElement.appendChild(empty);
-          selectedPantone = null;
-          renderPantoneDetail(null);
-          return;
-        }
-        if (!selectedPantone || !matches.some((item) => samePantone(item, selectedPantone))) selectedPantone = matches[0];
-        visibleMatches.forEach((item) => {
+      // Every match is reachable: cards render in batches as the list scrolls, so long lists stay quick.
+      let pantoneMatches = [];
+      let pantoneShown = 0;
+      let pantoneSelectedCard = null;
+      const pantoneMoreButton = document.createElement('button');
+      pantoneMoreButton.className = 'btn pantone-more';
+      pantoneMoreButton.type = 'button';
+      const pantoneMoreObserver = 'IntersectionObserver' in window
+        ? new IntersectionObserver((entries) => { if (entries.some((entry) => entry.isIntersecting)) appendPantoneBatch(); }, { rootMargin: '240px 0px' })
+        : null;
+      if (pantoneMoreObserver) pantoneMoreObserver.observe(pantoneMoreButton);
+      document.querySelectorAll('[data-pantone-total]').forEach((element) => { element.textContent = pantonePalette.length.toLocaleString('en-US'); });
+
+      const updatePantoneCount = () => {
+        const total = pantoneMatches.length;
+        const rest = total - pantoneShown;
+        pantoneCountElement.textContent = !total ? '未找到匹配色号'
+          : rest > 0 ? `匹配 ${total} 个 · 已显示 ${pantoneShown} 个，向下滚动继续` : `显示全部 ${total} 个色号`;
+        pantoneMoreButton.hidden = rest <= 0;
+        pantoneMoreButton.textContent = `再显示 ${Math.min(pantoneBatchSize, rest)} 个 · 还剩 ${rest} 个`;
+      };
+
+      const selectPantoneCard = (card, item) => {
+        selectedPantone = item;
+        pantoneCopyStatus.textContent = '';
+        if (pantoneSelectedCard) pantoneSelectedCard.classList.remove('is-selected');
+        card.classList.add('is-selected');
+        pantoneSelectedCard = card;
+        renderPantoneDetail(item);
+      };
+
+      const appendPantoneBatch = () => {
+        if (pantoneShown >= pantoneMatches.length) return;
+        const fragment = document.createDocumentFragment();
+        pantoneMatches.slice(pantoneShown, pantoneShown + pantoneBatchSize).forEach((item) => {
           const card = document.createElement('button');
-          card.className = `pantone-card${samePantone(selectedPantone, item) ? ' is-selected' : ''}`;
+          const isSelected = samePantone(selectedPantone, item);
+          card.className = `pantone-card${isSelected ? ' is-selected' : ''}`;
+          if (isSelected) pantoneSelectedCard = card;
           card.type = 'button';
           card.style.setProperty('--swatch', item.hex);
           const swatch = document.createElement('span');
@@ -5102,13 +5127,34 @@
           series.className = 'pantone-card-series';
           series.textContent = pantoneSeriesLabel[item.series];
           card.append(swatch, code, name, series);
-          card.addEventListener('click', () => {
-            selectedPantone = item;
-            pantoneCopyStatus.textContent = '';
-            renderPantoneResults();
-          });
-          pantoneResultsElement.appendChild(card);
+          card.addEventListener('click', () => selectPantoneCard(card, item));
+          fragment.appendChild(card);
         });
+        pantoneShown = Math.min(pantoneShown + pantoneBatchSize, pantoneMatches.length);
+        pantoneResultsElement.insertBefore(fragment, pantoneMoreButton);
+        updatePantoneCount();
+      };
+      pantoneMoreButton.addEventListener('click', appendPantoneBatch);
+
+      const renderPantoneResults = () => {
+        const matches = getPantoneMatches();
+        pantoneMatches = matches;
+        pantoneShown = 0;
+        pantoneSelectedCard = null;
+        pantoneResultsElement.innerHTML = '';
+        if (!matches.length) {
+          const empty = document.createElement('div');
+          empty.className = 'pantone-empty';
+          empty.textContent = '换个色号、英文名称，或切换色卡系列试试。';
+          pantoneResultsElement.appendChild(empty);
+          updatePantoneCount();
+          selectedPantone = null;
+          renderPantoneDetail(null);
+          return;
+        }
+        if (!selectedPantone || !matches.some((item) => samePantone(item, selectedPantone))) selectedPantone = matches[0];
+        pantoneResultsElement.appendChild(pantoneMoreButton);
+        appendPantoneBatch();
         renderPantoneDetail(selectedPantone);
       };
 
