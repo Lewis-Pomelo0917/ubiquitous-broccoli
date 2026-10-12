@@ -1311,10 +1311,82 @@
       font-size: 10px;
     }
 
-    .pantone-more {
-      grid-column: 1 / -1;
-      justify-self: center;
-      margin-top: 4px;
+    .pantone-pager {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px 16px;
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .pantone-page-size { display: inline-flex; align-items: center; gap: 8px; }
+    .pantone-page-size select {
+      min-height: 32px;
+      padding: 0 8px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-small);
+      outline: 0;
+      background: var(--field-bg);
+      color: var(--text);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+    .pantone-page-size select:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
+    .pantone-pages { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+    .pantone-pages[hidden] { display: none; }
+    .pantone-page-btn {
+      min-width: 32px;
+      min-height: 32px;
+      padding: 0 9px;
+      border: 1px solid transparent;
+      border-radius: var(--radius-button-compact);
+      background: transparent;
+      color: var(--text);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+    }
+    .pantone-page-btn:hover:not(:disabled) { background: var(--btn-hover); }
+    .pantone-page-btn[aria-current="page"] { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+    .pantone-page-gap { min-width: 20px; color: var(--faint); text-align: center; }
+
+    /* Back to top: rises in with a soft spring once the page is well scrolled, sinks away quickly. */
+    .back-to-top {
+      position: fixed;
+      right: max(22px, env(safe-area-inset-right));
+      bottom: max(24px, env(safe-area-inset-bottom));
+      z-index: 30;
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: var(--shadow-md);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateY(16px) scale(.82);
+      transition: opacity 180ms cubic-bezier(.4, 0, 1, 1), transform 220ms cubic-bezier(.4, 0, 1, 1), visibility 0s linear 220ms;
+    }
+    .back-to-top.is-visible {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: none;
+      transition: opacity 260ms cubic-bezier(.25, .1, .25, 1), transform 560ms cubic-bezier(.34, 1.4, .64, 1), visibility 0s;
+    }
+    .back-to-top.is-visible:hover { transform: translateY(-2px); }
+    .back-to-top.is-visible:active { transform: scale(.9); transition-duration: 120ms; }
+    .back-to-top:focus-visible { outline: 0; box-shadow: var(--focus-ring), var(--shadow-md); }
+    .back-to-top svg { width: 18px; height: 18px; }
+    @media (max-width: 560px) {
+      .back-to-top { right: 16px; bottom: 18px; width: 40px; height: 40px; }
     }
 
     .pantone-empty {
@@ -2294,7 +2366,7 @@
       justify-content: space-between;
       gap: 16px;
       margin: 0 auto;
-      padding: 24px;
+      padding: 24px 24px 84px;
       color: var(--faint);
       font-size: 11px;
     }
@@ -2596,7 +2668,8 @@
       .memo-list-flag,
       .placeholder-mark,
       .welcome-cover::before,
-      .app-dialog-close { corner-shape: round; }
+      .app-dialog-close,
+      .back-to-top { corner-shape: round; }
     }
 
     @media (max-width: 900px) {
@@ -3429,6 +3502,12 @@
 
               <div class="pantone-summary"><span class="pantone-count" id="pantone-count">显示 0 个色号</span><span class="pantone-summary-note">HEX / RGB / CMYK 为屏幕换算参考 · 公开 MIT 数据整理</span></div>
               <div class="pantone-results" id="pantone-results" aria-live="polite"></div>
+              <div class="pantone-pager">
+                <label class="pantone-page-size">每页
+                  <select id="pantone-page-size"><option value="12">12</option><option value="24" selected>24</option><option value="48">48</option></select>
+                </label>
+                <nav class="pantone-pages" id="pantone-pages" aria-label="潘通色号分页"></nav>
+              </div>
             </div>
           </section>
 
@@ -3702,6 +3781,8 @@
       </div>
     </div>
   </dialog>
+
+  <button class="back-to-top" type="button" id="back-to-top" aria-label="回到顶部" title="回到顶部"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg></button>
 
   <svg class="tab-lens-filters" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
  <filter id="tab-lens-refraction" filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" x="0" y="0" width="140" height="72" color-interpolation-filters="sRGB">
@@ -4981,7 +5062,9 @@
         U: 'Pantone Solid Uncoated · U',
         MC: 'Pantone Metallic · C'
       };
-      const pantoneBatchSize = 120;
+      const pantonePageSizeElement = document.getElementById('pantone-page-size');
+      const pantonePagesElement = document.getElementById('pantone-pages');
+      const pantonePageSizeKey = 'tradeDesk.pantonePageSize';
       const pantoneSearchElement = document.getElementById('pantone-search');
       const pantoneSeriesElement = document.getElementById('pantone-series');
       const pantoneResultsElement = document.getElementById('pantone-results');
@@ -5074,27 +5157,17 @@
         pantoneCopyHexButton.disabled = !hasItem;
       };
 
-      // Every match is reachable: cards render in batches as the list scrolls, so long lists stay quick.
       let pantoneMatches = [];
-      let pantoneShown = 0;
+      let pantonePage = 1;
       let pantoneSelectedCard = null;
-      const pantoneMoreButton = document.createElement('button');
-      pantoneMoreButton.className = 'btn pantone-more';
-      pantoneMoreButton.type = 'button';
-      const pantoneMoreObserver = 'IntersectionObserver' in window
-        ? new IntersectionObserver((entries) => { if (entries.some((entry) => entry.isIntersecting)) appendPantoneBatch(); }, { rootMargin: '240px 0px' })
-        : null;
-      if (pantoneMoreObserver) pantoneMoreObserver.observe(pantoneMoreButton);
+      try {
+        const savedSize = localStorage.getItem(pantonePageSizeKey);
+        if (['12', '24', '48'].includes(savedSize)) pantonePageSizeElement.value = savedSize;
+      } catch (_) {}
       document.querySelectorAll('[data-pantone-total]').forEach((element) => { element.textContent = pantonePalette.length.toLocaleString('en-US'); });
 
-      const updatePantoneCount = () => {
-        const total = pantoneMatches.length;
-        const rest = total - pantoneShown;
-        pantoneCountElement.textContent = !total ? '未找到匹配色号'
-          : rest > 0 ? `匹配 ${total} 个 · 已显示 ${pantoneShown} 个，向下滚动继续` : `显示全部 ${total} 个色号`;
-        pantoneMoreButton.hidden = rest <= 0;
-        pantoneMoreButton.textContent = `再显示 ${Math.min(pantoneBatchSize, rest)} 个 · 还剩 ${rest} 个`;
-      };
+      const pantonePageSize = () => Number(pantonePageSizeElement.value) || 24;
+      const pantonePageCount = () => Math.max(1, Math.ceil(pantoneMatches.length / pantonePageSize()));
 
       const selectPantoneCard = (card, item) => {
         selectedPantone = item;
@@ -5105,10 +5178,50 @@
         renderPantoneDetail(item);
       };
 
-      const appendPantoneBatch = () => {
-        if (pantoneShown >= pantoneMatches.length) return;
+      // Page list keeps first, last and the pages around the current one; gaps collapse to an ellipsis.
+      const pantonePageList = (current, last) => {
+        const pages = new Set([1, last, current - 1, current, current + 1]);
+        if (current <= 3) [2, 3, 4].forEach((page) => pages.add(page));
+        if (current >= last - 2) [last - 1, last - 2, last - 3].forEach((page) => pages.add(page));
+        const sorted = [...pages].filter((page) => page >= 1 && page <= last).sort((x, y) => x - y);
+        return sorted.flatMap((page, index) => (index && page - sorted[index - 1] > 1 ? ['gap', page] : [page]));
+      };
+
+      const renderPantonePager = () => {
+        const last = pantonePageCount();
+        pantonePagesElement.innerHTML = '';
+        pantonePagesElement.hidden = pantoneMatches.length <= pantonePageSize();
+        const pageButton = (label, page, ariaLabel) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'pantone-page-btn';
+          button.textContent = label;
+          if (ariaLabel) button.setAttribute('aria-label', ariaLabel);
+          if (page === pantonePage && label === String(page)) button.setAttribute('aria-current', 'page');
+          button.disabled = page < 1 || page > last;
+          button.addEventListener('click', () => goToPantonePage(page, true));
+          return button;
+        };
+        pantonePagesElement.appendChild(pageButton('‹', pantonePage - 1, '上一页'));
+        pantonePageList(pantonePage, last).forEach((page) => {
+          if (page === 'gap') {
+            const gap = document.createElement('span');
+            gap.className = 'pantone-page-gap';
+            gap.textContent = '…';
+            pantonePagesElement.appendChild(gap);
+          } else {
+            pantonePagesElement.appendChild(pageButton(String(page), page, `第 ${page} 页`));
+          }
+        });
+        pantonePagesElement.appendChild(pageButton('›', pantonePage + 1, '下一页'));
+      };
+
+      const renderPantonePage = () => {
+        const size = pantonePageSize();
+        const start = (pantonePage - 1) * size;
         const fragment = document.createDocumentFragment();
-        pantoneMatches.slice(pantoneShown, pantoneShown + pantoneBatchSize).forEach((item) => {
+        pantoneSelectedCard = null;
+        pantoneMatches.slice(start, start + size).forEach((item) => {
           const card = document.createElement('button');
           const isSelected = samePantone(selectedPantone, item);
           card.className = `pantone-card${isSelected ? ' is-selected' : ''}`;
@@ -5130,31 +5243,44 @@
           card.addEventListener('click', () => selectPantoneCard(card, item));
           fragment.appendChild(card);
         });
-        pantoneShown = Math.min(pantoneShown + pantoneBatchSize, pantoneMatches.length);
-        pantoneResultsElement.insertBefore(fragment, pantoneMoreButton);
-        updatePantoneCount();
+        pantoneResultsElement.innerHTML = '';
+        pantoneResultsElement.appendChild(fragment);
+        pantoneResultsElement.scrollTop = 0;
+        const total = pantoneMatches.length;
+        pantoneCountElement.textContent = total > size
+          ? `共 ${total} 个色号 · 第 ${pantonePage} / ${pantonePageCount()} 页`
+          : `显示 ${total} 个色号`;
+        renderPantonePager();
       };
-      pantoneMoreButton.addEventListener('click', appendPantoneBatch);
+
+      const goToPantonePage = (page, fromPager) => {
+        pantonePage = Math.min(Math.max(1, page), pantonePageCount());
+        renderPantonePage();
+        if (!fromPager) return;
+        const top = pantoneResultsElement.getBoundingClientRect().top;
+        const chrome = document.querySelector('.app-chrome');
+        const offset = (chrome ? chrome.getBoundingClientRect().bottom : 0) + 12;
+        if (top < offset) window.scrollBy({ top: top - offset - 40, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      };
 
       const renderPantoneResults = () => {
         const matches = getPantoneMatches();
         pantoneMatches = matches;
-        pantoneShown = 0;
-        pantoneSelectedCard = null;
-        pantoneResultsElement.innerHTML = '';
+        pantonePage = 1;
         if (!matches.length) {
+          pantoneResultsElement.innerHTML = '';
           const empty = document.createElement('div');
           empty.className = 'pantone-empty';
           empty.textContent = '换个色号、英文名称，或切换色卡系列试试。';
           pantoneResultsElement.appendChild(empty);
-          updatePantoneCount();
+          pantoneCountElement.textContent = '未找到匹配色号';
+          pantonePagesElement.hidden = true;
           selectedPantone = null;
           renderPantoneDetail(null);
           return;
         }
         if (!selectedPantone || !matches.some((item) => samePantone(item, selectedPantone))) selectedPantone = matches[0];
-        pantoneResultsElement.appendChild(pantoneMoreButton);
-        appendPantoneBatch();
+        renderPantonePage();
         renderPantoneDetail(selectedPantone);
       };
 
@@ -5172,6 +5298,13 @@
 
       pantoneSearchElement.addEventListener('input', renderPantoneResults);
       pantoneSeriesElement.addEventListener('change', renderPantoneResults);
+      pantonePageSizeElement.addEventListener('change', () => {
+        try { localStorage.setItem(pantonePageSizeKey, pantonePageSizeElement.value); } catch (_) {}
+        const first = (pantonePage - 1) * Number(pantonePageSizeElement.dataset.previous || 24);
+        pantonePageSizeElement.dataset.previous = pantonePageSizeElement.value;
+        goToPantonePage(Math.floor(first / pantonePageSize()) + 1, false);
+      });
+      pantonePageSizeElement.dataset.previous = pantonePageSizeElement.value;
       document.getElementById('pantone-clear-btn').addEventListener('click', () => {
         pantoneSearchElement.value = '';
         pantoneSeriesElement.value = 'all';
@@ -6940,6 +7073,22 @@
           apply(c === 'auto' ? 'light' : (c === 'light' ? 'dark' : 'auto'));
         });
         if (mq && mq.addEventListener) mq.addEventListener('change', paint);
+        var topBtn = document.getElementById('back-to-top'), topTicking = false;
+        function syncTop() {
+          topTicking = false;
+          var shown = window.scrollY > Math.max(560, window.innerHeight * 1.1);
+          if (!shown && topBtn.contains(document.activeElement)) topBtn.blur();
+          topBtn.classList.toggle('is-visible', shown);
+        }
+        if (topBtn) {
+          window.addEventListener('scroll', function () { if (!topTicking) { topTicking = true; requestAnimationFrame(syncTop); } }, { passive: true });
+          window.addEventListener('resize', syncTop);
+          topBtn.addEventListener('click', function () {
+            topBtn.blur();
+            window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+          });
+          syncTop();
+        }
         document.querySelectorAll('[data-result-target]').forEach(function (b) {
           b.addEventListener('click', function () {
             var t = document.querySelector(b.getAttribute('data-result-target'));
