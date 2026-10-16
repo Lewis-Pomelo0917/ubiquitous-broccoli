@@ -1,13 +1,16 @@
-# Trade Desk 项目上下文
+# Cubic 项目上下文
 
-记录日期：2026-10-10。本文描述当前仓库源码和有效设计约束；后续状态以当前分支文件为准。
+记录日期：2026-10-16。本文描述当前仓库源码和有效设计约束；后续状态以当前分支文件为准。
 
 ## 当前源码
 
 - Tauri 配置和前端元数据标记版本 `0.1.5-dev-0921`。
 - 当前包含八个模块：主页与本地 AI 观察、体积/CBM、本册进阶、金额英文、计算器、潘通查询、世界时钟和本地备忘录。
-- 主页读取运行时旁置的 `ai-intelligence.json`；源码仓库不包含该新闻快照。文件缺失时情报区会显示不可用状态。
-- `development/frontend/index.html` 集中主要界面、样式和业务交互；`development/desktop/` 是唯一 Tauri 工程，负责桌面窗口、托盘、单实例和本地 feed 读取；`development/tools/` 提供源码检查。
+- 主页通过 Tauri `read_ai_feed` 从 per-user `app_local_data_dir` 读取 version-1 feed，并用 `read_ai_status` 显示更新状态；Git 不包含用户新闻快照。
+- AI Watch 由 `development/desktop/ai_radar/watch.py` 管理，复用 91 条公开来源、规则筛选和本机 SQLite 状态。Qwen3-0.6B Q4_0 只选择证据中的连续原文片段，不生成日期、价格、类别、优先级或事件；疑似提示注入不送入模型，输出不通过摘录校验时保留最后好 feed。
+- Windows x64 完整候选是带本地资源载荷的单个 `Cubic.exe`。首次运行把模型、嵌入式 Python、llama.cpp CPU runner 和采集源释放到 per-user application data；用户端不下载模型或安装模型软件。采集仍需网络，推理可离线；WebView2 仍是 Windows 平台前提。
+- 每日调度仅在 Cubic 运行（包括托盘）期间存在；退出时 Job Object 结束采集/推理子进程树，无服务或自启动。应用标识 `com.tradedesk.app` 与本机存储键保持不变，移动或改名 EXE 不影响同一 Windows 用户的模型缓存/情报位置。
+- `development/frontend/index.html` 集中主要界面、样式和业务交互；`development/desktop/` 是唯一 Tauri 工程；`development/tools/` 提供源码检查。AI 契约、模型/推理器 hash、许可证、构建与 Claude 前端交接见 [`development/desktop/AI-WATCH.md`](development/desktop/AI-WATCH.md)。
 
 ## 业务边界
 
@@ -20,9 +23,11 @@
 ## 设计约束
 
 - 视觉基调为暖白与灰陶蓝，支持浅深主题；正文使用系统无衬线字体，标题沿用现有衬线字体与已提供的 Noto Serif SC 资源。正式 Logo 以 `development/frontend/trade-desk-logo.svg` 为准，并保留字体许可文件。
+- 产品名为 Cubic（原名 Trade Desk）；Logo 为手绘线条的灰陶蓝立方体，右侧面有凸起的字母 C，填色相对墨线错版（套印偏移），寓意 Cubic 与 CBM；深色主题下页头改用 `trade-desk-logo-dark.svg`（深色底、浅色线条），Windows 程序图标沿用浅色版。为保留用户本机数据，应用标识 `com.tradedesk.app`、本机存储键、字体与 Logo 文件名、工具脚本名保持不变；备忘导出文件名为 `cubic-memos-日期.json`，导入不校验 `app` 字段。
 - 导航维持 `.tab`、`.view`、`data-view`、ARIA 及 `activateView` 的关系。液态透镜只在拖动中预览，松手后切页，保留取消、键盘和减少动画支持。
+- 透镜外投影由独立的 `.tab-lens-shadow` 承担，`.tab-lens` 只用内阴影；外投影会扩大合成层边界，使折射贴图偏移、按住时标签被裁切变形。折射只作用于边缘，按住时标签放大用 CSS 缩放以保持清晰。窄窗时滚轮可横向滚动导航，切页会把选中项滚入可见区。
 - 设计优化可重排信息层级、表单/结果区、留白与密度，但先围绕代表模块验证方向；不得把本项目说明解释成无边界全站重设计授权。
-- 不新增框架、服务端、数据库、云同步或 AI 聊天来替代当前轻量本地结构。
+- 不新增框架、服务端、云同步或 AI 聊天来替代当前轻量本地结构。AI Watch 使用的本机观察数据库与嵌入式运行时只属于本任务明确授权的本地更新流程；不得读取/提交原观察项目的账号文件、数据库、备份或日志。
 
 ## 验证边界
 

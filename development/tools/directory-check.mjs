@@ -13,6 +13,7 @@ const sourceFiles = [
   'development/frontend/index.html',
   'development/frontend/pantone-data.js',
   'development/frontend/trade-desk-logo.svg',
+  'development/frontend/trade-desk-logo-dark.svg',
   'development/frontend/trade-desk-logo.png',
   'development/frontend/fonts/TradeDeskNotoSerifSC-Medium.ttf',
   'development/frontend/fonts/OFL-1.1.txt',
@@ -126,8 +127,8 @@ async function checkWork(root, workPath, findings) {
       const values = fields.get(field) ?? [];
       if (values.length !== 1 || !values[0]) findings.push({ code: 'WORK_TASK_FIELD', path: `${shown}/TASK.md`, reason: `“${field}：内容”必须恰好出现一次且非空。` });
     }
-    if ((fields.get('项目') ?? []).length === 1 && fields.get('项目')[0] !== 'Trade Desk') {
-      findings.push({ code: 'WORK_TASK_PROJECT', path: `${shown}/TASK.md`, reason: '项目不是 Trade Desk；归属需由规划核实。' });
+    if ((fields.get('项目') ?? []).length === 1 && !['Cubic', 'Trade Desk'].includes(fields.get('项目')[0])) {
+      findings.push({ code: 'WORK_TASK_PROJECT', path: `${shown}/TASK.md`, reason: '项目不是 Cubic（原名 Trade Desk）；归属需由规划核实。' });
     }
   }
 }
@@ -175,7 +176,7 @@ async function inspectLayout(root) {
     for (const name of ['frontend', 'desktop', 'tools']) safe.set(name, await safeDirectory(`development/${name}`));
     if (safe.get('frontend')) {
       const fonts = await safeDirectory('development/frontend/fonts');
-      for (const file of ['index.html', 'pantone-data.js', 'trade-desk-logo.svg', 'trade-desk-logo.png']) await safeFile(`development/frontend/${file}`);
+      for (const file of ['index.html', 'pantone-data.js', 'trade-desk-logo.svg', 'trade-desk-logo-dark.svg', 'trade-desk-logo.png']) await safeFile(`development/frontend/${file}`);
       if (fonts) {
         await safeFile('development/frontend/fonts/TradeDeskNotoSerifSC-Medium.ttf');
         await safeFile('development/frontend/fonts/OFL-1.1.txt');
@@ -220,7 +221,7 @@ async function selfTest() {
   const files = [
     ...rootFiles,
     'development/frontend/index.html', 'development/frontend/pantone-data.js',
-    'development/frontend/trade-desk-logo.svg', 'development/frontend/trade-desk-logo.png',
+    'development/frontend/trade-desk-logo.svg', 'development/frontend/trade-desk-logo-dark.svg', 'development/frontend/trade-desk-logo.png',
     'development/frontend/fonts/TradeDeskNotoSerifSC-Medium.ttf', 'development/frontend/fonts/OFL-1.1.txt',
     'development/desktop/package.json', 'development/desktop/package-lock.json', 'development/desktop/.gitignore',
     'development/desktop/src-tauri/Cargo.toml', 'development/desktop/src-tauri/Cargo.lock',
@@ -237,7 +238,7 @@ async function selfTest() {
     for (const directory of directories) await mkdir(join(root, directory), { recursive: true });
     for (const file of files) await writeFile(join(root, file), 'fixture');
     await writeFile(join(root, 'development/desktop/package.json'), JSON.stringify({ scripts: { pretauri: 'node ../tools/directory-check.mjs' } }));
-    await writeFile(join(root, 'work/sample-task/TASK.md'), '项目：Trade Desk\n用途：隔离自检样例\n状态：自检中\n');
+    await writeFile(join(root, 'work/sample-task/TASK.md'), '项目：Cubic\n用途：隔离自检样例\n状态：自检中\n');
     assert.deepEqual(await inspectLayout(root), [], 'valid source tree should pass');
 
     await writeFile(join(root, '.unexpected'), 'fixture');

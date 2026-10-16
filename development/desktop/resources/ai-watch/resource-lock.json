@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "target": "x86_64-pc-windows-msvc",
+  "model": {
+    "repository": "ggml-org/Qwen3-0.6B-GGUF",
+    "revision": "b5f37287796e5be0ea3dab2e7430873fb3f73e49",
+    "file": "Qwen3-0.6B-Q4_0.gguf",
+    "size_bytes": 428970080,
+    "sha256": "da2572f16c06133561ce56accaa822216f2391ef4d37fba427801cd6736417d4",
+    "license": "Apache-2.0"
+  },
+  "inference_runtime": {
+    "repository": "ggml-org/llama.cpp",
+    "release": "b11669",
+    "commit": "620d2225cc436ab0b001e3200e590e3b286ef9ab",
+    "asset": "llama-b11669-bin-win-cpu-x64.zip",
+    "size_bytes": 19537886,
+    "sha256": "37b3efcf962847ca869745fd4ccf7f5e7e8dacfeff9fa3523b4ca8cdc66d632b",
+    "license": "MIT"
+  },
+  "python_runtime": {
+    "version": "3.13.16",
+    "asset": "python-3.13.16-embed-amd64.zip",
+    "size_bytes": 11439094,
+    "sha256": "97dae5274cc54867065e8d5a3226e48c35017ed332a0fdb0e27d5b5821961297",
+    "license": "PSF-2.0",
+    "sbom": "python-3.13.16-embed-amd64.zip.spdx.json",
+    "sbom_size_bytes": 15338,
+    "sbom_sha256": "acbd1648d27c7bc5f7e48160c8e2ad9d0b8e153ba474f03a784d71562d35eeff"
+  },
+  "msvc_runtime": {
+    "source": "Visual Studio VC145 x64 Redistributable 14.51.36231",
+    "license": "Microsoft Visual C++ Redistributable; app-local files from the licensed Redist tree",
+    "files": [
+      {
+        "name": "msvcp140.dll",
+        "file_version": "14.51.36247.0",
+        "size_bytes": 643512,
+        "sha256": "7c26614e1d733892c2deac7e245ce115504b1d80592dd0a01b08e3e5a55f89ca"
+      },
+      {
+        "name": "vcruntime140.dll",
+        "file_version": "14.51.36247.0",
+        "size_bytes": 178616,
+        "sha256": "d1f4225df2cd877dbf130d5668a021dce3f94118455ff5ec952061c30afc9ce7"
+      },
+      {
+        "name": "vcruntime140_1.dll",
+        "file_version": "14.51.36247.0",
+        "size_bytes": 50112,
+        "sha256": "a7146c08f89fe5b04541ab507cdb59ff7b44534d4ba3c668a426c6450a03434e"
+      }
+    ]
+  }
+}
