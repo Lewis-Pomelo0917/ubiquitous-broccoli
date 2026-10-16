@@ -2041,6 +2041,8 @@
       font-size: 11px;
       line-height: 1.45;
     }
+    .home-ai-summary { margin: 8px 26px 0 35px; color: var(--text); font-size: 12px; line-height: 1.55; }
+    .home-ai-summary-note { margin: 5px 26px 0 35px; color: var(--muted); font-size: 10px; line-height: 1.4; }
     .home-ai-source { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .home-ai-time { flex: 0 0 auto; color: var(--faint); font-variant-numeric: tabular-nums; }
     .home-ai-empty { padding: 26px 0 7px; color: var(--muted); font-size: 13px; text-align: center; }
@@ -2815,7 +2817,7 @@
           <aside class="home-ai-card" aria-labelledby="home-ai-title">
             <div class="home-ai-head">
               <h3 class="home-ai-title" id="home-ai-title">AI 观察</h3>
-              <span class="home-ai-day">今日</span>
+              <span class="home-ai-day" id="home-ai-status" title="情报状态">准备中</span>
             </div>
             <div class="home-ai-events" id="home-ai-events" aria-live="polite">
               <div class="home-ai-empty">正在读取…</div>
@@ -6421,7 +6423,8 @@
       console.assert(JSON.stringify(memoState) === memoImportStateBeforeCheck, 'Memo invalid import self-check failed');
 
       const homeAiEvents = document.getElementById('home-ai-events');
-      const aiFeedState = { feed: null, loading: true, error: false };
+      const homeAiStatus = document.getElementById('home-ai-status');
+      const aiFeedState = { feed: null, status: null, loading: true, error: false };
       const aiFeedPriorityOrder = { P0: 0, P1: 1, P2: 2, P3: 3 };
 
       const aiFeedText = (value) => value == null ? '' : String(value);
@@ -6433,6 +6436,34 @@
       };
       const aiFeedIsToday = (date, now = new Date()) => date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
       const aiFeedTime = (date) => String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
+      const aiFeedStatusText = (status) => {
+        if (!status || typeof status !== 'object') return '今日';
+        const labels = {
+          preparing: '准备本地组件', updating: '更新中', updated: '已更新',
+          no_new_items: '今日暂无新增', partial: '部分未完成', failed: '更新失败',
+          interrupted: '恢复上次更新', unsupported: '更新不可用'
+        };
+        const label = labels[aiFeedText(status.state)] || '今日';
+        const lastSuccess = aiFeedDate(status.last_success_at);
+        const stale = lastSuccess && Date.now() - lastSuccess.getTime() > 86400000;
+        if (stale && aiFeedText(status.state) === 'updating') return '更新中 · 旧数据';
+        if (stale && aiFeedText(status.state) === 'failed') return '失败 · 过期';
+        if (stale && aiFeedText(status.state) === 'partial') return '部分失败 · 过期';
+        if (stale && aiFeedText(status.state) === 'interrupted') return '中断 · 过期';
+        if (stale) return '数据过期';
+        if (status.state === 'updated' && Number(status.new_items) > 0) return '更新 +' + Number(status.new_items);
+        return label;
+      };
+      const aiFeedStatusTitle = (status) => {
+        if (!status || typeof status !== 'object') return '情报状态';
+        const lastSuccess = aiFeedDate(status.last_success_at);
+        const details = [];
+        if (aiFeedText(status.message)) details.push(aiFeedText(status.message));
+        if (lastSuccess) details.push('最近成功检查：' + lastSuccess.toLocaleString());
+        if (Number(status.failed_sources) > 0) details.push('失败来源：' + Number(status.failed_sources));
+        if (Number(status.pending_sources) > 0) details.push('待检查来源：' + Number(status.pending_sources));
+        return details.join('；') || '情报状态';
+      };
       const aiFeedTodayEvents = () => {
         const now = new Date();
         const events = aiFeedState.feed && Array.isArray(aiFeedState.feed.events) ? aiFeedState.feed.events : [];
@@ -6455,6 +6486,10 @@
       };
       const renderHomeAi = () => {
         while (homeAiEvents.firstChild) homeAiEvents.removeChild(homeAiEvents.firstChild);
+        if (homeAiStatus) {
+          homeAiStatus.textContent = aiFeedStatusText(aiFeedState.status);
+          homeAiStatus.title = aiFeedStatusTitle(aiFeedState.status);
+        }
         if (aiFeedState.loading && !aiFeedState.feed) {
           homeAiEvents.innerHTML = '<div class="home-ai-empty">正在读取…</div>';
           return;
@@ -6469,8 +6504,17 @@
         const events = aiFeedTodayEvents();
         if (!events.length) {
           const empty = document.createElement('div');
-          empty.className = 'home-ai-empty';
-          empty.textContent = '今天暂无新情报';
+          const state = aiFeedText(aiFeedState.status && aiFeedState.status.state);
+          empty.className = 'home-ai-empty' + (state === 'failed' ? ' is-error' : '');
+          empty.textContent = state === 'failed'
+            ? '更新失败，已保留最近成功数据'
+            : state === 'partial'
+              ? '部分来源未能检查；保留已有情报'
+              : state === 'updating' || state === 'preparing'
+                ? '正在准备或更新本地情报'
+                : state === 'no_new_items'
+                  ? '今天检查完成，暂无新增情报'
+                  : '今天暂无可展示的情报';
           homeAiEvents.appendChild(empty);
           return;
         }
@@ -6511,6 +6555,24 @@
           time.textContent = aiFeedTime(date);
           meta.append(source, time);
           article.appendChild(meta);
+          const evidence = aiFeedText(event.evidence);
+          const summary = event.summary_mode === 'extractive-v1'
+            && typeof event.summary === 'string'
+            && evidence.includes(event.summary)
+            ? event.summary
+            : evidence.slice(0, 180);
+          if (summary) {
+            const excerpt = document.createElement('p');
+            excerpt.className = 'home-ai-summary';
+            excerpt.textContent = summary;
+            article.appendChild(excerpt);
+          }
+          if (aiFeedText(event.summary_note)) {
+            const note = document.createElement('div');
+            note.className = 'home-ai-summary-note';
+            note.textContent = aiFeedText(event.summary_note);
+            article.appendChild(note);
+          }
           fragment.appendChild(article);
         });
         homeAiEvents.appendChild(fragment);
@@ -6522,6 +6584,12 @@
           let raw;
           const invoke = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
           if (typeof invoke === 'function') {
+            try {
+              const statusRaw = await invoke('read_ai_status');
+              aiFeedState.status = typeof statusRaw === 'string' ? JSON.parse(statusRaw) : statusRaw;
+            } catch (statusError) {
+              aiFeedState.status = null;
+            }
             raw = await window.__TAURI__.core.invoke('read_ai_feed');
           } else {
             const response = await fetch('./ai-intelligence.json', { cache: 'no-store' });
@@ -6535,9 +6603,11 @@
           aiFeedState.error = false;
           renderHomeAi();
         } catch (error) {
-          aiFeedState.feed = null;
+          const preparing = ['preparing', 'updating'].includes(aiFeedText(aiFeedState.status && aiFeedState.status.state));
+          const missingInitialFeed = aiFeedText(error && (error.message || error)).includes('本机 AI 情报不可用');
+          aiFeedState.feed = preparing && missingInitialFeed ? { version: 1, events: [] } : null;
           aiFeedState.loading = false;
-          aiFeedState.error = true;
+          aiFeedState.error = !aiFeedState.feed;
           renderHomeAi();
         }
       };

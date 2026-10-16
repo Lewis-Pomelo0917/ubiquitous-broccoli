@@ -684,6 +684,18 @@ assert.match(html, /外贸常用工具，一处完成。/);
 assert.doesNotMatch(html, /class="welcome-cover-mark"|class="welcome-meta"|class="welcome-actions"/);
 assert.match(html, /\.welcome-grid > \.home-ai-card \{ align-self: start; box-shadow: none; \}/);
 assert.match(html, /class="memo-calendar-card"[^>]*open/);
+assert.ok(html.includes("invoke('read_ai_status')"), 'AI observation must read the worker status separately from feed data');
+assert.match(html, /state === 'no_new_items'/);
+assert.match(html, /event\.summary_mode === 'extractive-v1'/);
+assert.match(html, /home-ai-summary-note/);
+const aiWatchRust = await readFile(join(root, 'development', 'desktop', 'src-tauri', 'src', 'ai_watch.rs'), 'utf8');
+assert.match(aiWatchRust, /app_local_data_dir\(\)/);
+assert.match(aiWatchRust, /CUBICAI1/);
+assert.match(aiWatchRust, /JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE/);
+const aiWatchWorker = await readFile(join(root, 'development', 'desktop', 'ai_radar', 'watch.py'), 'utf8');
+assert.match(aiWatchWorker, /suspicious_instruction/);
+assert.match(aiWatchWorker, /summary_mode/);
+assert.match(aiWatchWorker, /os\.replace/);
 for (const file of ['development/desktop/package.json', 'development/desktop/package-lock.json',
   'development/desktop/src-tauri/tauri.conf.json', 'development/desktop/src-tauri/Cargo.toml',
   'development/desktop/src-tauri/Cargo.lock']) {
