@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import bisect
 import email.utils
 import hashlib
 import html
@@ -28,7 +29,7 @@ USER_AGENT = "ai-radar-mvp/0.1 (+rules-first; contact owner before increasing ra
 
 # Bump when the text produced by visible_text() changes: old snapshots would
 # otherwise differ from every new fetch and flood the feed with false events.
-SNAPSHOT_FORMAT = 2
+SNAPSHOT_FORMAT = 3
 
 
 @dataclass(frozen=True)
@@ -69,7 +70,7 @@ class Event:
 
 _SKIP_TAGS = frozenset({
     "script", "style", "noscript", "svg", "template", "iframe", "canvas", "object",
-    "nav", "footer", "aside", "button", "select", "textarea", "dialog",
+    "nav", "footer", "aside", "select", "textarea", "dialog",
 })
 _ALWAYS_SKIP_TAGS = frozenset({"script", "style", "noscript", "svg", "template", "iframe", "canvas", "object"})
 _VOID_TAGS = frozenset({
@@ -90,12 +91,14 @@ _INVISIBLE = re.compile(
     r"[\u0000-\u0008\u000e-\u001f\u007f-\u009f­​-‏‪-‮⁠-⁤"
     r"⁦-⁯﻿-\U000f0000-\U0010ffff]"
 )
+_SURROGATES = re.compile(r"[\ud800-\udfff]")  # lone surrogates (from JSON escapes) cannot be stored as UTF-8
 _ISO_PREFIX = re.compile(r"^\s*(\d{4})-(\d{2})-(\d{2})")
 
 
 def _clean_text(value: str) -> str:
     value = value.translate(_SPACE_TRANSLATION)
     value = _INVISIBLE.sub("", value)
+    value = _SURROGATES.sub("", value)
     return re.sub(r"\s+", " ", value).strip()
 
 
@@ -121,14 +124,33 @@ def _absolute_link(base: str, href: str | None) -> str:
 
 
 class PageText(str):
-    """Extracted page text; ``links`` maps a line to the first link seen in it."""
+    """Extracted page text.
+
+    ``links`` maps a line to the first link seen in it. ``entries`` holds (first line,
+    end line) ranges of the page's item containers (article, li, card links), which let a
+    listing whose headline sits above its date be cut into the right entries. ``kind`` is
+    "html", "feed" or "json".
+    """
 
     links: dict[str, str]
+    entries: list[tuple[int, int]]
+    kind: str
 
-    def __new__(cls, value: str, links: dict[str, str] | None = None) -> "PageText":
+    def __new__(
+        cls, value: str, links: dict[str, str] | None = None,
+        entries: list[tuple[int, int]] | None = None, kind: str = "html",
+    ) -> "PageText":
         obj = super().__new__(cls, value)
         obj.links = links or {}
+        obj.entries = entries or []
+        obj.kind = kind
         return obj
+
+
+_ENTRY_TAGS = frozenset({"article", "li", "a"})
+_ENTRY_MAX_LINES = 40
+_ENTRY_LIMIT = 6000
+_ENTRY_DEPTH_LIMIT = 500
 
 
 class _VisibleText(HTMLParser):
@@ -148,9 +170,13 @@ class _VisibleText(HTMLParser):
         self._skip_tag = ""
         self._skip_depth = 0
         self._buffer: list[str] = []
+        self._has_text = False  # the pending line holds real text
+        self._text_since_cell = False
         self._line_href = ""
         self._anchor = ""
         self._in_time = False
+        self._open_entries: list[tuple[str, int]] = []
+        self.entries: list[tuple[int, int]] = []
 
     @property
     def stuck_in_skip(self) -> bool:
@@ -163,7 +189,23 @@ class _VisibleText(HTMLParser):
                 self.parts.append(text)
                 self.hrefs.append(self._line_href)
         self._buffer = []
+        self._has_text = False
+        self._text_since_cell = False
         self._line_href = ""
+
+    def _open_entry(self, tag: str, start: int) -> None:
+        if len(self._open_entries) < _ENTRY_DEPTH_LIMIT:  # unclosed tags in hostile markup must not grow without bound
+            self._open_entries.append((tag, start))
+
+    def _close_entry(self, tag: str) -> None:
+        for position in range(len(self._open_entries) - 1, -1, -1):
+            if self._open_entries[position][0] == tag:
+                start = self._open_entries[position][1]
+                del self._open_entries[position:]
+                end = len(self.parts) + (1 if self._has_text else 0)
+                if start >= 0 and 2 <= end - start <= _ENTRY_MAX_LINES and len(self.entries) < _ENTRY_LIMIT:
+                    self.entries.append((start, end))
+                return
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         tag = tag.lower()
@@ -182,19 +224,25 @@ class _VisibleText(HTMLParser):
             stamp = _iso_date(attributes.get("datetime"))
             if stamp:
                 self._buffer.append(f" {stamp} ")
+                self._has_text = self._text_since_cell = True
                 self._in_time = True
             return
         if tag == "a":
             self._anchor = _absolute_link(self._base, attributes.get("href"))
             if self._anchor and not self._line_href:
                 self._line_href = self._anchor
+            # A card link that starts a fresh line may wrap a whole entry.
+            self._open_entry("a", -1 if self._has_text else len(self.parts))
             return
         if tag in ("td", "th"):
-            if "".join(self._buffer).strip():
+            if self._text_since_cell:
                 self._buffer.append(" | ")
+                self._text_since_cell = False
             return
         if tag in _BLOCK_TAGS:
             self.flush()
+            if tag in _ENTRY_TAGS:
+                self._open_entry(tag, len(self.parts))
 
     def handle_endtag(self, tag: str) -> None:
         tag = tag.lower()
@@ -210,19 +258,24 @@ class _VisibleText(HTMLParser):
             return
         if tag == "a":
             self._anchor = ""
+            self._close_entry("a")
             return
         if tag in _BLOCK_TAGS:
             self.flush()
+            if tag in _ENTRY_TAGS:
+                self._close_entry(tag)
 
     def handle_data(self, data: str) -> None:
         if self._skip_tag or self._in_time:
             return
-        if self._anchor and not self._line_href and data.strip():
-            self._line_href = self._anchor
+        if data.strip():
+            self._has_text = self._text_since_cell = True
+            if self._anchor and not self._line_href:
+                self._line_href = self._anchor
         self._buffer.append(data)
 
 
-def _html_lines(text: str, base_url: str, skip: frozenset[str]) -> tuple[list[str], list[str], bool]:
+def _html_lines(text: str, base_url: str, skip: frozenset[str]) -> tuple[list[str], list[str], bool, list[tuple[int, int]]]:
     parser = _VisibleText(base_url, skip)
     try:
         parser.feed(text)
@@ -231,19 +284,22 @@ def _html_lines(text: str, base_url: str, skip: frozenset[str]) -> tuple[list[st
         pass
     stuck = parser.stuck_in_skip
     parser.flush()
-    return parser.parts, parser.hrefs, stuck
+    return parser.parts, parser.hrefs, stuck, parser.entries
 
 
 def _html_text(text: str, base_url: str = "") -> PageText:
-    lines, hrefs, stuck = _html_lines(text, base_url, _SKIP_TAGS)
-    if stuck and sum(len(line) for line in lines) < 600 and len(text) > 20000:
-        # An unclosed <nav>/<footer> swallowed the page; read it again keeping them.
-        lines, hrefs, _ = _html_lines(text, base_url, _ALWAYS_SKIP_TAGS)
+    lines, hrefs, stuck, entries = _html_lines(text, base_url, _SKIP_TAGS)
+    if stuck:
+        # An unclosed <nav>/<footer>/<button> swallowed the rest of the page; read it again
+        # keeping those tags, and use that reading when it recovers more text.
+        again = _html_lines(text, base_url, _ALWAYS_SKIP_TAGS)
+        if sum(len(line) for line in again[0]) > sum(len(line) for line in lines):
+            lines, hrefs, _, entries = again
     links: dict[str, str] = {}
     for line, href in zip(lines, hrefs):
         if href and line not in links:
             links[line] = href
-    return PageText("\n".join(lines), links)
+    return PageText("\n".join(lines), links, entries)
 
 
 def _decode(payload: bytes, content_type: str = "") -> str:
@@ -276,15 +332,15 @@ def _feed_date(value: str | None) -> str:
         return stamp
     try:
         parsed = email.utils.parsedate_to_datetime(text)
-    except (TypeError, ValueError, IndexError):
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone(timezone.utc)
+        return parsed.strftime("%Y-%m-%d")
+    except (TypeError, ValueError, IndexError, OverflowError):
         return ""
-    if parsed.tzinfo is not None:
-        parsed = parsed.astimezone(timezone.utc)
-    return parsed.strftime("%Y-%m-%d")
 
 
 def _markup_to_text(markup: str) -> str:
-    lines, _, _ = _html_lines(html.unescape(markup) if "&lt;" in markup else markup, "", _ALWAYS_SKIP_TAGS)
+    lines = _html_lines(html.unescape(markup) if "&lt;" in markup else markup, "", _ALWAYS_SKIP_TAGS)[0]
     return _clean_text(" ".join(lines))
 
 
@@ -311,6 +367,8 @@ def _feed_text(text: str, base_url: str = "") -> PageText | None:
             elif name in ("title", "updated", "published", "pubdate", "date", "summary", "description", "content", "encoded"):
                 fields.setdefault(name, "".join(child.itertext()))
         title = _clean_text(fields.get("title", ""))
+        if _embedded_explicit_date(title) is not None:
+            title = ""
         body = _markup_to_text(fields.get("content") or fields.get("encoded") or fields.get("summary") or fields.get("description") or "")
         stamp = _feed_date(fields.get("updated") or fields.get("published") or fields.get("pubdate") or fields.get("date"))
         if body.lower().startswith(title.lower()):
@@ -323,7 +381,7 @@ def _feed_text(text: str, base_url: str = "") -> PageText | None:
         lines.append(line)
         if link:
             links.setdefault(line, link)
-    return PageText("\n".join(lines), links) if lines else None
+    return PageText("\n".join(lines), links, kind="feed") if lines else None
 
 
 def _statuspage_text(data: dict) -> str | None:
@@ -364,8 +422,8 @@ def _json_text(text: str) -> str | None:
 
 
 def visible_text(payload: bytes, content_type: str = "", base_url: str = "") -> PageText:
-    text = _decode(payload, content_type)
-    head = text[:600].lstrip().lower()
+    text = _decode(payload, content_type).lstrip("\ufeff \t\r\n")  # a BOM or blank line breaks the XML declaration
+    head = text[:600].lower()
     lowered_type = (content_type or "").lower()
     if "xml" in lowered_type or head.startswith(("<?xml", "<rss", "<feed")) or "<feed" in head[:500]:
         rendered = _feed_text(text, base_url)
@@ -374,7 +432,7 @@ def visible_text(payload: bytes, content_type: str = "", base_url: str = "") -> 
     if "json" in lowered_type or head.startswith(("{", "[")):
         rendered_json = _json_text(text)
         if rendered_json is not None:
-            return PageText(rendered_json)
+            return PageText(rendered_json, kind="json")
     return _html_text(text, base_url)
 
 
@@ -441,6 +499,32 @@ def classify(text: str) -> tuple[str, float]:
 # State
 # --------------------------------------------------------------------------
 
+_SQLITE_CORRUPT, _SQLITE_NOTADB = 11, 26
+
+
+def is_corruption(exc: BaseException) -> bool:
+    """True when sqlite reports a damaged file, as opposed to a busy, locked or full one."""
+    if not isinstance(exc, sqlite3.DatabaseError):
+        return False
+    code = getattr(exc, "sqlite_errorcode", None)
+    if code is not None:
+        return (code & 0xFF) in (_SQLITE_CORRUPT, _SQLITE_NOTADB)  # extended codes keep the primary code in the low byte
+    text = str(exc).lower()
+    return "malformed" in text or "not a database" in text
+
+
+def replace_with_retry(source: str | Path, destination: str | Path, attempts: int = 6) -> None:
+    """``os.replace`` that rides out the short sharing violations antivirus scanners and indexers cause on Windows."""
+    for attempt in range(attempts):
+        try:
+            os.replace(source, destination)
+            return
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(0.1 * (2 ** attempt))  # 0.1 .. 1.6 s, about 3 s in all
+
+
 class State:
     def __init__(self, path: str | Path) -> None:
         self.path = str(path)
@@ -453,6 +537,9 @@ class State:
             raise
 
     def _prepare(self) -> None:
+        check = self.db.execute("PRAGMA quick_check(1)").fetchone()  # raises for a file that is not a database at all
+        if not check or str(check[0]).lower() != "ok":
+            raise sqlite3.DatabaseError("database disk image is malformed: " + (str(check[0])[:80] if check else "no result"))
         self.db.executescript(
             """
             CREATE TABLE IF NOT EXISTS snapshots (
@@ -665,14 +752,7 @@ def export_feed(state: State, path: str | Path, source_ids: Iterable[str] | None
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
-        for attempt in range(3):
-            try:
-                os.replace(temporary, destination)
-                break
-            except PermissionError:
-                if attempt == 2:
-                    raise
-                time.sleep(0.05 * (2 ** attempt))
+        replace_with_retry(temporary, destination)
     finally:
         if temporary and temporary.exists():
             temporary.unlink()
@@ -824,6 +904,8 @@ def _meaningful(text: str) -> bool:
 
 def _page_problem(text: str) -> str:
     """Why a fetched page cannot be monitored (empty string when it can)."""
+    if getattr(text, "kind", "html") != "html":
+        return "" if text.strip() else "empty: no readable text"  # a parsed feed or status document is real content
     if len(text) < 2500 and _INTERSTITIAL.search(text):
         return "blocked: browser verification or JavaScript required"
     if not _meaningful(text):
@@ -946,6 +1028,58 @@ def _year_context(line: str, source_id: str = "") -> int | None:
     return None
 
 
+def _date_line_indexes(lines: list[str], source_id: str = "") -> list[int]:
+    year: int | None = None
+    found: list[int] = []
+    for index, line in enumerate(lines):
+        context = _year_context(line, source_id)
+        if context is not None:
+            year = context
+        elif _parse_date(line, year) is not None:
+            found.append(index)
+    return found
+
+
+def _item_starts(lines: list[str], entries: list[tuple[int, int]] | None, source_id: str = "") -> dict[int, int]:
+    """Where each dated entry really begins, for listings that print a headline above the date.
+
+    Maps the index of a date line to the first line of the item (article, list item or card
+    link) that holds it, when that item has exactly one date and the date sits within its
+    first lines. A page must show this pattern at least twice to count as an item listing: a
+    lone dated section inside a page-wide article is left alone.
+    """
+    if not entries or len(entries) < 2:
+        return {}
+    dates = _date_line_indexes(lines, source_id)
+    if len(dates) < 2:
+        return {}
+    starts: dict[int, int] = {}
+    for first, end in entries:
+        low = bisect.bisect_left(dates, first)
+        if low >= len(dates) or dates[low] >= end:
+            continue
+        if low + 1 < len(dates) and dates[low + 1] < end:
+            continue  # several dates: a section, not one item
+        index = dates[low]
+        if 0 < index - first <= 3 and first > starts.get(index, -1):
+            starts[index] = first
+    return starts if len(starts) >= 2 else {}
+
+
+def _lead_lines(lines: list[str], offset: int, position: int, first: int | None, source_id: str = "") -> list[tuple[int, str]]:
+    """The headline lines printed above a date line, as (absolute index, text); never crosses another date."""
+    if first is None:
+        return []
+    lead: list[tuple[int, str]] = []
+    for k in range(position - 1, max(first - offset, 0) - 1, -1):
+        text = lines[k]
+        if _year_context(text, source_id) is not None or _parse_date(text) is not None:
+            break
+        lead.append((offset + k, text))
+    lead.reverse()
+    return lead
+
+
 def recent_dated_blocks(
     text: str,
     days: int = 14,
@@ -953,6 +1087,7 @@ def recent_dated_blocks(
     future_days: int = 30,
     source_id: str = "",
     reference_time: datetime | None = None,
+    entries: list[tuple[int, int]] | None = None,
 ) -> list[tuple[str, str]]:
     now = reference_time or datetime.now(timezone.utc)
     if now.tzinfo is None:
@@ -960,21 +1095,22 @@ def recent_dated_blocks(
     cutoff = now - timedelta(days=max(1, days))
     future_cutoff = now + timedelta(days=max(1, future_days))
     lines = text.splitlines()
+    starts = _item_starts(lines, entries, source_id)
     blocks: list[tuple[str, str]] = []
     current_date: datetime | None = None
-    current_lines: list[str] = []
+    current_lines: list[tuple[int, str]] = []
     context_year: int | None = None
 
     def flush() -> None:
         nonlocal current_date, current_lines
         if current_date is not None and cutoff <= current_date <= future_cutoff:
-            body = "\n".join(current_lines).strip()
+            body = "\n".join(line for _, line in current_lines).strip()
             if _meaningful(body):
                 blocks.append((current_date.isoformat(), body))
         current_date = None
         current_lines = []
 
-    for line in lines:
+    for index, line in enumerate(lines):
         new_context = _year_context(line, source_id)
         if new_context is not None:
             flush()
@@ -982,11 +1118,14 @@ def recent_dated_blocks(
             continue
         parsed = _parse_date(line, context_year)
         if parsed is not None:
+            lead = _lead_lines(lines, 0, index, starts.get(index), source_id)
+            if lead:
+                current_lines = [item for item in current_lines if item[0] < lead[0][0]]
             flush()
             current_date = parsed
-            current_lines = [line]
+            current_lines = [*lead, (index, line)]
         elif current_date is not None and len(current_lines) < max_lines:
-            current_lines.append(line)
+            current_lines.append((index, line))
     flush()
     return blocks
 
@@ -1039,8 +1178,14 @@ _VOLATILE_LINE = re.compile(
     r"(?:just now|yesterday|today)|(?:last )?updated\s+.*\bago)$",
     re.IGNORECASE,
 )
+# "Leak" only counts as a rumour marker in its news sense; a memory leak or a leaked API key
+# described by the vendor is a plain fact.
 _STRONG_UNCERTAIN = re.compile(
-    r"rumou?r|reportedly|unconfirmed|alleged|\bleak(?:s|ed|ing)?\b|teaser|据传|传闻|爆料|未经证实",
+    r"rumou?r|reportedly|unconfirmed|alleged|teaser|据传|传闻|爆料|未经证实|"
+    r"\bleak(?:er|ster)s?\b|according to (?:a |the )?leaks?\b|"
+    r"\bleaked\s+(?:image|photo|screenshot|document|doc|slide|memo|benchmark|spec|detail|info|footage|video|build|roadmap|plan|report)|"
+    r"\b(?:new|latest|apparent|reported|another)\s+leaks?\b(?!\s+(?:in|of)\s+(?:memory|resource|file|handle|connection))|"
+    r"\bleaks?\s+(?:suggest|show|reveal|hint|indicate|point|claim)",
     re.IGNORECASE,
 )
 _WEAK_UNCERTAIN = re.compile(r"\b(?:may|might|could)\b(?!\s+\d)|considering|或将|考虑|可能", re.IGNORECASE)
@@ -1067,31 +1212,36 @@ def _truncate(text: str, limit: int) -> str:
 
 
 def _first_sentence(text: str, limit: int = 110) -> str:
-    parts = re.split(r"(?<=[.!?。！？])\s+(?=[\"'“‘(\[A-Z0-9一-鿿])", text.strip(), maxsplit=2)
-    sentence = parts[0]
-    if len(sentence) < 25 and len(parts) > 1:
-        sentence = f"{sentence} {parts[1]}"
+    parts = [part for part in re.split(r"(?<=[.!?])\s+(?=[\"'“‘(\[A-Z0-9一-鿿])|(?<=[。！？])", text.strip(), maxsplit=2) if part.strip()]
+    sentence = parts[0] if parts else text.strip()
+    if len(sentence) + len(re.findall(r"[一-鿿]", sentence)) < 25 and len(parts) > 1:  # a CJK character counts double
+        sentence = f"{sentence}{'' if re.search(r'[一-鿿。！？]$', sentence) else ' '}{parts[1].strip()}"
     return _truncate(sentence, limit)
 
 
 def _headline(lines: list[str]) -> str:
     """A readable title taken verbatim from the first informative line."""
+    if len(lines) >= 2 and len(lines[0]) <= 60 and len(lines[1]) <= 40 and not lines[0].endswith((".", "!", "?")) and not _meaningful(lines[1]) and re.search(r"\d", lines[1]):
+        return f"{lines[0]} — {lines[1]}"
     pick = next((line for line in lines[:4] if len(line.split()) >= 3 or len(line) >= 16), lines[0] if lines else "")
-    if len(pick) <= 110 and not re.search(r"[.!?。！？]\s+\S", pick):
+    if len(pick) <= 110 and not re.search(r"[.!?]\s+\S|[。！？]\S", pick):
         return pick.rstrip(" :") or pick
     return _first_sentence(pick)
 
 
 def _clean_body(lines: list[str], source_id: str = "") -> list[str]:
     body: list[str] = []
+    dated = False
     for index, line in enumerate(lines):
         text = line.strip()
-        if index == 0:
+        if index < 4 and not dated:  # the entry's own date line (a label or headline may sit above it)
             heading = _date_heading(text)
             if heading is not None:
                 text = heading[1]
+                dated = True
             elif _YEARLESS_DATE.fullmatch(text):
                 text = ""
+                dated = True
         text = re.sub(r"^[•·▪‣\-–]\s+", "", text)
         if len(re.findall(r"[A-Za-z0-9\u4e00-\u9fff]", text)) < 2 or _BOILERPLATE_LINE.match(text):
             continue
@@ -1125,10 +1275,19 @@ def _limit_evidence(lines: list[str], max_chars: int = 900) -> str:
     return "\n".join(kept)
 
 
+# Hosting domains where every first label is somebody else's site.
+_SHARED_HOSTS = frozenset({
+    "github.io", "gitlab.io", "pages.dev", "vercel.app", "netlify.app", "herokuapp.com", "web.app",
+    "firebaseapp.com", "readthedocs.io", "substack.com", "medium.com", "wordpress.com", "blogspot.com",
+})
+
+
 def _site(url: str) -> str:
     """Registrable-looking domain, so docs.example.com and www.example.com count as one site."""
     labels = (urllib.parse.urlsplit(url).hostname or "").lower().split(".")
     if len(labels) >= 3 and len(labels[-1]) == 2 and labels[-2] in ("co", "com", "org", "net", "gov", "ac", "edu"):
+        return ".".join(labels[-3:])
+    if len(labels) >= 3 and ".".join(labels[-2:]) in _SHARED_HOSTS:
         return ".".join(labels[-3:])
     return ".".join(labels[-2:])
 
@@ -1154,6 +1313,15 @@ def _year_marks(lines: list[str], source_id: str) -> list[int | None]:
     return marks
 
 
+def _context_label(lines: list[str], index: int) -> str:
+    """Nearest preceding line that names what a bare number belongs to (a model, a plan)."""
+    for position in range(index - 1, max(-1, index - 13), -1):
+        line = lines[position]
+        if _meaningful(line) and _parse_date(line) is None and not _BOILERPLATE_LINE.match(line):
+            return _cut_words(line, 90)
+    return ""
+
+
 def _heading_before(lines: list[str], index: int, year: int | None) -> str:
     for position in range(index - 1, max(-1, index - 13), -1):
         parsed = _parse_date(lines[position], year)
@@ -1162,31 +1330,38 @@ def _heading_before(lines: list[str], index: int, year: int | None) -> str:
     return ""
 
 
-def _split_by_dates(lines: list[str], base_date: str = "", year: int | None = None, source_id: str = "") -> list[Segment]:
+def _split_by_dates(
+    lines: list[str], base_date: str = "", year: int | None = None, source_id: str = "",
+    starts: dict[int, int] | None = None, offset: int = 0,
+) -> list[Segment]:
     segments: list[Segment] = []
     current_date = base_date
-    current: list[str] = []
-    for line in lines:
+    current: list[tuple[int, str]] = []
+    for position, line in enumerate(lines):
         context = _year_context(line, source_id)
         if context is not None:
             year = context
             continue
         parsed = _parse_date(line, year)
         if parsed is not None:
+            lead = _lead_lines(lines, offset, position, starts.get(offset + position) if starts else None, source_id)
+            if lead:
+                current = [item for item in current if item[0] < lead[0][0]]
             if current:
-                segments.append((current_date, current))
+                segments.append((current_date, [text for _, text in current]))
             current_date = parsed.isoformat()
-            current = [line]
+            current = [*lead, (offset + position, line)]
         else:
-            current.append(line)
+            current.append((offset + position, line))
     if current:
-        segments.append((current_date, current))
+        segments.append((current_date, [text for _, text in current]))
     return segments
 
 
-def _backfill_segments(current: str, days: int, source_id: str) -> list[Segment]:
+def _backfill_segments(current: str, days: int, source_id: str, entries: list[tuple[int, int]] | None = None) -> list[Segment]:
     segments: list[Segment] = [
-        (published, body.splitlines()) for published, body in recent_dated_blocks(current, days, source_id=source_id)
+        (published, body.splitlines())
+        for published, body in recent_dated_blocks(current, days, source_id=source_id, entries=entries)
     ]
     segments.extend((published, [line]) for published, line in recent_actionable_lines(current, days))
     seen: set[tuple[str, str]] = set()
@@ -1199,7 +1374,7 @@ def _backfill_segments(current: str, days: int, source_id: str) -> list[Segment]
     return unique
 
 
-def _diff_segments(previous: str, current: str, source_id: str = "") -> list[Segment]:
+def _diff_segments(previous: str, current: str, source_id: str = "", entries: list[tuple[int, int]] | None = None) -> list[Segment]:
     """Lines that are new on the page, grouped under their date headings.
 
     A line already present anywhere in the previous snapshot is not news, so
@@ -1209,6 +1384,7 @@ def _diff_segments(previous: str, current: str, source_id: str = "") -> list[Seg
     new = current.splitlines()
     if len(new) > 4000:
         new = new[:2000] + new[-2000:]
+        entries = None  # the cut shifts every line index
     added = [index for index, line in enumerate(new) if line not in old_lines]
     # Re-skinned or restructured pages replace most lines at once; that is not news.
     if len(added) > max(60, 0.6 * len(new)):
@@ -1222,10 +1398,17 @@ def _diff_segments(previous: str, current: str, source_id: str = "") -> list[Seg
             hunks.append((index, [new[index]]))
         previous_index = index
     marks = _year_marks(new, source_id)
+    starts = _item_starts(new, entries, source_id)
     segments: list[Segment] = []
     for start, lines in hunks:
         year = marks[start - 1] if start > 0 else None
-        segments.extend(_split_by_dates(lines, _heading_before(new, start, year), year, source_id))
+        offset = start
+        if not _meaningful("\n".join(lines)):
+            label = _context_label(new, start)
+            if label:
+                lines = [label, *lines]
+                offset -= 1  # the borrowed label sits in front of the hunk
+        segments.extend(_split_by_dates(lines, _heading_before(new, start, year), year, source_id, starts, offset))
     return segments
 
 
@@ -1320,6 +1503,8 @@ def _parse_iso(value: str) -> datetime:
 
 
 MAX_SEGMENTS_PER_SOURCE = 10
+# A source with exactly this category is about one thing, so any readable change is that thing.
+_SINGLE_PURPOSE_TYPES = {"pricing": "pricing", "pricing_quota": "pricing", "deprecation": "deprecation", "safety_status": "security"}
 # Types that deserve their own event; the rest only count when nothing stronger matched.
 _HEADLINE_TYPES = frozenset({"deprecation", "pricing", "reset", "security", "release", "open_weights", "policy"})
 
@@ -1345,8 +1530,8 @@ def _events_from_segments(
         if source.id == "huggingface-models":
             matches = [("content_change", 0.55)]
         matches = [match for match in matches if match[0] in allowed_types]
-        if not matches and "safety_status" in source.category:
-            matches = [("security", 0.9)]
+        if not matches and source.category.strip() in _SINGLE_PURPOSE_TYPES:
+            matches = [(_SINGLE_PURPOSE_TYPES[source.category.strip()], 0.8)]
         if not matches and "content_change" in allowed_types:
             matches = [("content_change", 0.55)]
         uncertain = bool(_STRONG_UNCERTAIN.search(evidence)) or (source.tier == "C" and bool(_WEAK_UNCERTAIN.search(evidence)))
@@ -1416,6 +1601,9 @@ def _apply_fetch(
     state.record_success(source.id)
     links = dict(getattr(text, "links", {}) or {})
     current = normalize(text)
+    entries = list(getattr(text, "entries", ()) or ())
+    if len(current.splitlines()) != len(str(text).splitlines()):
+        entries = []  # line indexes no longer line up with the item ranges
     content_hash = sha256(current)
     if previous and previous["content_hash"] == content_hash:
         state.touch_snapshot(source.id)
@@ -1425,9 +1613,9 @@ def _apply_fetch(
         if backfill_days <= 0 or "community_signal" in source.category:
             segments: list[Segment] = []
         else:
-            segments = _backfill_segments(current, backfill_days, source.id)
+            segments = _backfill_segments(current, backfill_days, source.id, entries)
     else:
-        segments = _diff_segments(previous["content"], current, source.id)
+        segments = _diff_segments(previous["content"], current, source.id, entries)
     events = _events_from_segments(source, state, segments, links, first_snapshot) if segments else []
     # Saved last: if event creation fails the same change is retried next cycle.
     state.save_snapshot(source, current, content_hash, result.headers)

@@ -5,26 +5,38 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import time
-from datetime import date, datetime, timedelta, timezone
+import traceback
+from datetime import date, datetime, timedelta, timezone, tzinfo
 from pathlib import Path
 from typing import Any, Callable
 
-from .core import State, collect_all, export_feed, load_sources, recent_actionable_lines
+from .core import State, collect_all, export_feed, is_corruption, load_sources, recent_actionable_lines, replace_with_retry
 
 
 # Instruction-like text aimed at an AI. Plain mentions of "system prompt" or
-# "developer message" are ordinary AI-industry news and must not be treated as attacks.
+# "developer message" are ordinary AI-industry news and must not be treated as attacks;
+# a role label followed by an order, a demand to answer with a number and chat-template
+# control tokens are.
 _PROMPT_INJECTION = re.compile(
     r"(?i)\b(?:ignore|disregard|override|forget)\b.{0,80}\b(?:instructions?|rules?|prompts?)\b|"
+    r"\b(?:ignore|disregard|forget)\b.{0,30}\b(?:above|previous|prior|earlier)\b|"
     r"\b(?:reveal|print|repeat|show)\b.{0,40}\b(?:system|developer)\s+(?:prompt|message|instructions?)\b|"
     r"\b(?:act as|you are now|pretend to be)\b.{0,40}\b(?:chatgpt|an? assistant|a language model)\b|"
     r"\byou are (?:chatgpt|an? (?:ai )?assistant|a language model)\b|"
+    r"\b(?:system|developer|assistant)\s+(?:prompt|message|instructions?)\s*[:：].{0,60}\b(?:always|never|must|only|ignore|answer|reply|respond|choose|select|pick|output)\b|"
+    r"\b(?:answer|reply|respond|choose|select|pick|output)\b[^.\n]{0,25}\b(?:option|choice|number)s?\s*#?\d|"
+    r"\b(?:answer|reply|respond)\s+(?:only\s+)?with\s+(?:the\s+)?(?:number\s+|option\s+)?#?\d\b|"
+    r"<\|[a-z_]{2,20}\|>|\[/?INST\]|<<\s*/?SYS\s*>>|"
     r"忽略.{0,24}(?:指令|规则|提示)|无视.{0,24}(?:指令|规则|提示)|"
-    r"(?:泄露|输出|重复).{0,12}(?:系统|开发者)(?:提示|指令|消息)"
+    r"(?:泄露|输出|重复).{0,12}(?:系统|开发者)(?:提示|指令|消息)|"
+    r"(?:系统|开发者|助手)(?:提示|指令|消息)\s*[:：].{0,40}(?:请|必须|只|务必|回答|回复|选择)|"
+    r"(?:只|仅|务必|必须).{0,4}(?:回答|回复|选择|输出).{0,4}[0-9一二三四五六七八九]"
 )
 # Wording that marks the source itself as unverified. Ordinary modal verbs
 # ("may", "could") are normal documentation prose and are not uncertainty.
@@ -77,17 +89,21 @@ def is_legacy_event(event: dict[str, Any]) -> bool:
 # Ranking and the home card selection (mirrored by the frontend)
 # --------------------------------------------------------------------------
 
-def event_day(event: dict[str, Any]) -> date | None:
-    """Calendar day of the news: its own date when known, else the day it was found."""
+def event_day(event: dict[str, Any], tz: tzinfo | None = None) -> date | None:
+    """Calendar day of the news: its own date (UTC) when known, else the day it was found (local).
+
+    ``tz`` stands in for the machine's time zone; the frontend check injects an explicit
+    offset because ``time.tzset`` does not exist on Windows.
+    """
     published = _utc(event.get("published_at"))
     if published is not None:
         return published.date()
     discovered = _utc(event.get("discovered_at"))
-    return discovered.astimezone().date() if discovered else None
+    return discovered.astimezone(tz).date() if discovered else None
 
 
-def event_age_days(event: dict[str, Any], today: date) -> int:
-    day = event_day(event)
+def event_age_days(event: dict[str, Any], today: date, tz: tzinfo | None = None) -> int:
+    day = event_day(event, tz)
     # Upcoming dates (a deprecation next week) count as current.
     return 9999 if day is None else max(0, (today - day).days)
 
@@ -99,11 +115,11 @@ def _confidence(event: dict[str, Any]) -> float:
         return 0.0
 
 
-def importance_key(event: dict[str, Any], today: date) -> tuple[int, int, float, float, str]:
+def importance_key(event: dict[str, Any], today: date, tz: tzinfo | None = None) -> tuple[int, int, float, float, str]:
     discovered = _utc(event.get("discovered_at"))
     return (
         _PRIORITY.get(str(event.get("priority") or "P3"), 3),
-        event_age_days(event, today),
+        event_age_days(event, today, tz),
         -_confidence(event),
         -(discovered.timestamp() if discovered else 0.0),
         str(event.get("key") or ""),
@@ -111,22 +127,23 @@ def importance_key(event: dict[str, Any], today: date) -> tuple[int, int, float,
 
 
 def _title_key(event: dict[str, Any]) -> str:
-    return re.sub(r"[^\w一-鿿]+", " ", str(event.get("title") or "").casefold()).strip()
+    # lower(), not casefold(): the frontend uses toLowerCase() and both must agree
+    return re.sub(r"[^\w一-鿿]+", " ", str(event.get("title") or "").lower()).strip()
+
+
+def in_display_window(event: dict[str, Any], today: date, tz: tzinfo | None = None) -> bool:
+    return event_age_days(event, today, tz) <= DISPLAY_WINDOW_DAYS.get(str(event.get("priority") or "P3"), 3)
 
 
 def display_events(
-    events: list[dict[str, Any]], now: datetime | None = None, limit: int = DISPLAY_LIMIT
+    events: list[dict[str, Any]], now: datetime | None = None, limit: int = DISPLAY_LIMIT, tz: tzinfo | None = None
 ) -> list[dict[str, Any]]:
     """The items the home card shows: most important first, recent days only."""
-    today = (now or datetime.now(timezone.utc)).astimezone().date()
-    eligible = [
-        event for event in events
-        if isinstance(event, dict)
-        and event_age_days(event, today) <= DISPLAY_WINDOW_DAYS.get(str(event.get("priority") or "P3"), 3)
-    ]
+    today = (now or datetime.now(timezone.utc)).astimezone(tz).date()
+    eligible = [event for event in events if isinstance(event, dict) and in_display_window(event, today, tz)]
     chosen: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for event in sorted(eligible, key=lambda item: importance_key(item, today)):
+    for event in sorted(eligible, key=lambda item: importance_key(item, today, tz)):
         key = _title_key(event) or str(event.get("key") or "")
         if key in seen:
             continue
@@ -137,9 +154,25 @@ def display_events(
     return chosen
 
 
-def retain_recent(events: list[dict[str, Any]], now: datetime, days: int = RETENTION_DAYS) -> list[dict[str, Any]]:
-    today = now.astimezone().date()
-    return [event for event in events if event_age_days(event, today) <= days]
+def retain_recent(
+    events: list[dict[str, Any]], now: datetime, days: int = RETENTION_DAYS, tz: tzinfo | None = None
+) -> list[dict[str, Any]]:
+    today = now.astimezone(tz).date()
+    return [event for event in events if event_age_days(event, today, tz) <= days]
+
+
+def cap_events(
+    events: list[dict[str, Any]], now: datetime, limit: int = FEED_LIMIT, tz: tzinfo | None = None
+) -> list[dict[str, Any]]:
+    """Keep the events worth publishing when there are more than the feed can hold.
+
+    News still inside its display window comes first whatever its priority: a pile of
+    week-old high-priority items must never push today's news out of the feed.
+    """
+    today = now.astimezone(tz).date()
+    return sorted(
+        events, key=lambda item: (0 if in_display_window(item, today, tz) else 1, *importance_key(item, today, tz))
+    )[: max(0, limit)]
 
 
 def prepare_new_events(
@@ -225,7 +258,21 @@ def merge_events(
 # --------------------------------------------------------------------------
 
 def _norm(text: str) -> str:
-    return re.sub(r"[^\w\u4e00-\u9fff]+", " ", text.casefold()).strip()
+    return re.sub(r"[^\w\u4e00-\u9fff]+", " ", text.lower()).strip()
+
+
+def repeats_title(summary: str, title: str) -> bool:
+    """True when a summary adds nothing to its headline (the frontend applies the same test)."""
+    key = _norm(summary)
+    head = _norm(title)
+    if not key:
+        return True
+    return bool(head) and (key == head or key in head or (head in key and len(key) <= len(head) + 12))
+
+
+def _visual_length(text: str) -> int:
+    """Length where a CJK character counts double, since it is about as wide as two Latin ones."""
+    return len(text) + len(re.findall(r"[一-鿿]", text))
 
 
 def _evidence_after_title(event: dict[str, Any]) -> str:
@@ -240,14 +287,24 @@ def _evidence_after_title(event: dict[str, Any]) -> str:
 
 
 def _cut_clause(text: str, limit: int = 160) -> str:
-    if len(text) <= limit:
+    width = 0
+    end = len(text)
+    for index, char in enumerate(text):
+        width += 2 if "一" <= char <= "鿿" else 1
+        if width > limit:
+            end = index
+            break
+    if end == len(text):
         return text
-    window = text[:limit]
-    for separator in ("; ", ", ", " - ", " "):
+    window = text[:end]
+    for separator in ("；", "，", "、", "; ", ", ", " - ", " "):
         position = window.rfind(separator)
-        if position >= 80:
-            return window[:position].rstrip(" ,;-")
+        if position >= end * 0.5:
+            return window[:position].rstrip(" ,;-，；、")
     return window.rstrip()
+
+
+_SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+|(?<=[。！？])\s*")
 
 
 def candidate_sentences(event: dict[str, Any], limit: int = 8) -> list[str]:
@@ -257,18 +314,18 @@ def candidate_sentences(event: dict[str, Any], limit: int = 8) -> list[str]:
     sentences that keep that wording qualify, so a summary can never sound more certain
     than the evidence.
     """
-    title = _norm(str(event.get("title") or ""))
+    title = str(event.get("title") or "")
     uncertain = bool(_UNCERTAIN.search(str(event.get("evidence") or "")))
     options: list[str] = []
     seen: set[str] = set()
     for line in _evidence_after_title(event).splitlines():
-        for sentence in re.split(r"(?<=[.!?。！？])\s+", line.strip()):
+        for sentence in _SENTENCE_BREAK.split(line.strip()):
             sentence = sentence.strip()
-            if len(sentence) < 20 or (uncertain and not _UNCERTAIN.search(sentence)):
+            if _visual_length(sentence) < 20 or (uncertain and not _UNCERTAIN.search(sentence)):
                 continue
             sentence = _cut_clause(sentence)
             key = _norm(sentence)
-            if key in seen or (title and (key == title or key in title or (title in key and len(key) <= len(title) + 12))):
+            if key in seen or repeats_title(sentence, title):
                 continue
             seen.add(key)
             options.append(sentence)
@@ -416,7 +473,7 @@ def _run_model(
     deadline = time.monotonic() + budget_seconds
     consecutive_failures = 0
     summarized = 0
-    with tempfile.TemporaryDirectory(prefix="candidate-", dir=temp_dir) as folder:
+    with tempfile.TemporaryDirectory(prefix="candidate-", dir=temp_dir, ignore_cleanup_errors=True) as folder:
         folder_path = Path(folder)
         for index, (event, options) in enumerate(candidates):
             if consecutive_failures >= 2 or time.monotonic() >= deadline:
@@ -504,7 +561,7 @@ def atomic_json(path: Path, value: dict[str, Any]) -> None:
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temp_path, path)
+        replace_with_retry(temp_path, path)
     finally:
         if temp_path and temp_path.exists():
             temp_path.unlink()
@@ -586,6 +643,18 @@ def next_due_unix(now: datetime, failed_run: bool, ok_share: float, consecutive_
     return int(max(morning.timestamp(), stamp + 6 * 3600))
 
 
+def quarantine_database(db: Path) -> Path:
+    """Set a damaged state database aside (keeping the three newest) so a fresh one can be built."""
+    target = db.with_name(f"{db.name}.corrupt-{int(time.time())}")
+    db.replace(target)
+    for old in sorted(db.parent.glob(f"{db.name}.corrupt-*"))[:-3]:
+        try:
+            old.unlink()
+        except OSError:
+            pass
+    return target
+
+
 def collect_candidate(
     db: Path, sources: Path, output: Path, run_timeout: int, source_timeout: int,
     events_since: datetime | None = None, backfill_days: int = BACKFILL_DAYS, workers: int = 8,
@@ -594,8 +663,10 @@ def collect_candidate(
     cycle_started = datetime.now(timezone.utc)
     try:
         state = State(db)
-    except sqlite3.DatabaseError:
-        db.replace(db.with_name(f"{db.name}.corrupt-{int(time.time())}"))
+    except sqlite3.DatabaseError as exc:
+        if not is_corruption(exc):
+            raise  # busy, locked or full: the data is fine and must not be thrown away
+        quarantine_database(db)
         state = State(db)
     try:
         report: list[dict[str, Any]] = []
@@ -625,18 +696,20 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     previous_status = _load_status(args.status)
     status = _base_status(previous_status)
-    atomic_json(args.status, status)
-    temp_root = args.data_dir / "ai-watch" / "tmp"
-    temp_root.mkdir(parents=True, exist_ok=True)
-    for stale in temp_root.glob("candidate-*"):
-        if stale.is_dir():
-            import shutil
-            shutil.rmtree(stale)
-        elif stale.is_file():
-            stale.unlink()
     consecutive = int(previous_status.get("consecutive_failures") or 0)
 
     try:
+        atomic_json(args.status, status)
+        temp_root = args.data_dir / "ai-watch" / "tmp"
+        temp_root.mkdir(parents=True, exist_ok=True)
+        for stale in temp_root.glob("candidate-*"):
+            if stale.is_dir():
+                shutil.rmtree(stale, ignore_errors=True)  # a file held by a scanner must not stop the update
+            else:
+                try:
+                    stale.unlink()
+                except OSError:
+                    pass
         previous_feed = {"version": 1, "generated_at": now.isoformat(), "events": []}
         if args.feed.exists():
             try:
@@ -647,7 +720,7 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         # the watermark only advances once a cycle has written its feed.
         watermark = _utc(previous_feed.get("collected_through")) or now - timedelta(days=BACKFILL_DAYS + 7)
         watermark = max(watermark, now - timedelta(days=RETENTION_DAYS))
-        with tempfile.TemporaryDirectory(prefix="candidate-", dir=temp_root) as folder:
+        with tempfile.TemporaryDirectory(prefix="candidate-", dir=temp_root, ignore_cleanup_errors=True) as folder:
             candidate_path = Path(folder) / "feed.json"
             collect_candidate(
                 args.db, args.sources, candidate_path, args.run_timeout, args.source_timeout,
@@ -678,8 +751,10 @@ def run_cycle(args: argparse.Namespace) -> dict[str, Any]:
         previous_events = [event for event in previous_feed["events"] if not is_legacy_event(event)]
         candidates = [event for event in candidate_feed["events"] if not is_legacy_event(event)]
         new_events, stale_count = prepare_new_events(candidates, watermark, now)
-        merged, added, duplicates = merge_events(previous_events, new_events, limit=1000)
-        merged = retain_recent(merged, now)[:FEED_LIMIT]
+        merged, _merged_new, duplicates = merge_events(previous_events, new_events, limit=1000)
+        merged = cap_events(retain_recent(merged, now), now)
+        previous_keys = {str(event.get("key")) for event in previous_events}
+        added = sum(1 for event in merged if str(event.get("key")) not in previous_keys)  # what was actually published
 
         model_stats: dict[str, Any] = {}
         try:
@@ -775,10 +850,22 @@ def main() -> int:
         if not path.is_file():
             print(json.dumps({"state": "failed", "message": "本地运行组件缺失"}))
             return 2
-    result = run_cycle(args)
+    try:
+        result = run_cycle(args)
+    except Exception as exc:  # last resort: say what happened on stdout and stderr, which the app reads
+        traceback.print_exc()
+        print(json.dumps({"state": "failed", "message": f"{type(exc).__name__}: {exc}"[:200]}))
+        return 1
     print(json.dumps(result))
     return 1 if result["state"] == "failed" else 0
 
 
+def exit_now(code: int) -> None:
+    """End the process at once; fetch threads still waiting on a slow server must not keep a finished update alive."""
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code)
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    exit_now(main())

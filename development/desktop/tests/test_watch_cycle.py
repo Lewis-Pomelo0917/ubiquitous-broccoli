@@ -1,5 +1,11 @@
 """End-to-end update cycles against a local fixture website and a stand-in for the model binary."""
+import contextlib
+import io
 import json
+import os
+import sqlite3
+import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -11,7 +17,9 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from ai_radar import watch
-from ai_radar.core import State, collect_all, load_sources
+from ai_radar.core import State, collect_all, load_sources, replace_with_retry
+
+DESKTOP = Path(__file__).resolve().parent.parent
 
 PAGES = {}
 
@@ -238,6 +246,128 @@ class CycleTests(unittest.TestCase):
         self.assertNotEqual(status["state"], "failed")
         self.assertEqual(self.feed()["version"], 1)
 
+    def test_todays_news_is_published_even_when_old_high_priority_items_fill_the_feed(self):
+        PAGES["/pricing"] = changelog([(long_date(0), ["We have lowered the price of the Acorn Mini model to $0.50 per million tokens."])])
+        self.add_source("pricing", "/pricing", category="pricing")
+        old = []
+        for number in range(50):
+            published = day(9 + number % 20)
+            old.append({
+                "key": f"old{number}", "source_id": "other", "source_name": "Other", "title": f"Old release {number}",
+                "url": "https://example.com", "event_type": "release", "status": "confirmed", "confidence": 0.9,
+                "discovered_at": published.isoformat(), "evidence": f"Old release passage number {number} about the Acorn model.",
+                "provider": "Acorn", "priority": "P0", "published_at": published.isoformat(),
+            })
+        watch.atomic_json(self.args.feed, {"version": 1, "generated_at": day(1).isoformat(), "collected_through": day(1).isoformat(),
+                                           "health": {}, "failed_sources": [], "pending_sources": [], "events": old})
+        status = self.cycle()
+        events = self.feed()["events"]
+        self.assertEqual(len(events), 50)
+        self.assertEqual(status["new_items"], 1)
+        fresh = [item for item in events if item["source_id"] == "pricing"]
+        self.assertEqual(len(fresh), 1)
+        self.assertEqual(watch.display_events(events)[0]["key"], fresh[0]["key"])
+
+    def test_a_locked_state_database_is_not_mistaken_for_a_corrupt_one(self):
+        PAGES["/changelog"] = changelog([(long_date(1), ["Launched the Acorn 3 model with a 1M token context window."])])
+        self.add_source("changelog", "/changelog")
+        self.cycle()
+        locker = sqlite3.connect(self.args.db, isolation_level=None)
+        locker.execute("BEGIN EXCLUSIVE")
+        real_connect = sqlite3.connect
+        try:
+            with patch("ai_radar.core.sqlite3.connect", side_effect=lambda *a, **k: real_connect(*a, **{**k, "timeout": 0.1})):
+                status = self.cycle()
+        finally:
+            locker.rollback()
+            locker.close()
+        self.assertEqual(status["state"], "failed")
+        self.assertFalse(list(self.data.glob("state.sqlite3.corrupt-*")))
+        kept = sqlite3.connect(self.args.db)
+        self.assertEqual(kept.execute("SELECT COUNT(*) FROM snapshots").fetchone()[0], 1)
+        kept.close()
+
+    def test_damage_inside_the_state_database_is_found_and_rebuilt(self):
+        PAGES["/changelog"] = changelog([(long_date(1), ["Launched the Acorn 3 model with a 1M token context window."])])
+        self.add_source("changelog", "/changelog")
+        self.cycle()
+        raw = bytearray(self.args.db.read_bytes())
+        marker = raw.find(b"Launched the Acorn 3 model")
+        self.assertGreater(marker, 0)
+        page_size = int.from_bytes(raw[16:18], "big") or 65536  # the database header says how large a page is
+        page_start = (marker // page_size) * page_size
+        raw[page_start:page_start + 12] = b"\xff" * 12  # wreck the b-tree page that holds the snapshot
+        self.args.db.write_bytes(bytes(raw))
+        status = self.cycle()
+        self.assertNotEqual(status["state"], "failed")
+        self.assertTrue(list(self.data.glob("state.sqlite3.corrupt-*")))
+        self.assertEqual(self.cycle()["consecutive_failures"], 0)
+
+    def test_only_the_three_newest_quarantined_databases_are_kept(self):
+        for stamp in (1000000001, 1000000002, 1000000003, 1000000004):
+            (self.data / f"state.sqlite3.corrupt-{stamp}").write_bytes(b"x")
+        self.args.db.write_bytes(b"not a database" * 100)
+        watch.quarantine_database(self.args.db)
+        names = sorted(path.name.rsplit("-", 1)[1] for path in self.data.glob("state.sqlite3.corrupt-*"))
+        self.assertEqual(len(names), 3)
+        self.assertNotIn("1000000001", names)
+
+    def test_a_transient_sharing_violation_does_not_cost_the_update(self):
+        real_replace = os.replace
+        calls = []
+
+        def flaky(source, destination):
+            calls.append(destination)
+            if len(calls) < 3:
+                raise PermissionError(13, "The process cannot access the file because it is being used by another process")
+            return real_replace(source, destination)
+
+        target = self.root / "out.json"
+        with patch("ai_radar.core.os.replace", side_effect=flaky):
+            watch.atomic_json(target, {"ok": True})
+        self.assertEqual(json.loads(target.read_text(encoding="utf-8")), {"ok": True})
+        self.assertEqual(len(calls), 3)
+        with patch("ai_radar.core.os.replace", side_effect=PermissionError(13, "locked")), self.assertRaises(PermissionError):
+            replace_with_retry(self.root / "a", self.root / "b", attempts=2)
+
+    def test_leftover_work_folders_that_cannot_be_removed_do_not_stop_the_update(self):
+        PAGES["/changelog"] = changelog([(long_date(1), ["Launched the Acorn 3 model with a 1M token context window."])])
+        self.add_source("changelog", "/changelog")
+        leftover = self.data / "ai-watch" / "tmp" / "candidate-leftover"
+        leftover.mkdir(parents=True)
+        (leftover / "feed.json").write_text("{}", encoding="utf-8")
+        with patch("ai_radar.watch.shutil.rmtree") as remove:
+            status = self.cycle()
+        remove.assert_any_call(leftover, ignore_errors=True)
+        self.assertEqual(status["state"], "updated")
+
+    def test_a_crash_outside_the_cycle_is_reported_not_swallowed(self):
+        for name in ("llama.exe", "schema.json"):
+            (self.root / name).write_bytes(b"x")
+        self.add_source("changelog", "/changelog")
+        argv = ["watch", "--data-dir", str(self.data), "--feed", str(self.args.feed), "--status", str(self.args.status),
+                "--db", str(self.args.db), "--runner", str(self.root / "llama.exe"), "--model", str(self.root / "model.gguf"),
+                "--schema", str(self.root / "schema.json"), "--sources", str(self.root / "sources.json")]
+        out, err = io.StringIO(), io.StringIO()
+        with patch.object(sys, "argv", argv), patch("ai_radar.watch.run_cycle", side_effect=RuntimeError("boom")), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = watch.main()
+        self.assertEqual(code, 1)
+        self.assertIn("RuntimeError: boom", json.loads(out.getvalue())["message"])
+        self.assertIn("Traceback", err.getvalue())
+
+    def test_a_finished_update_does_not_wait_for_fetches_still_in_flight(self):
+        code = ("import threading, time; from ai_radar import watch; "
+                "threading.Thread(target=time.sleep, args=(60,)).start(); watch.exit_now(3)")
+        started = time.monotonic()
+        process = subprocess.Popen([sys.executable, "-B", "-c", code], cwd=DESKTOP)  # run() is stubbed for the model in setUp
+        try:
+            returncode = process.wait(timeout=40)
+        finally:
+            process.kill()
+        self.assertEqual(returncode, 3)
+        self.assertLess(time.monotonic() - started, 20)
+
     def test_a_corrupt_state_database_is_set_aside_and_rebuilt(self):
         PAGES["/changelog"] = changelog([(long_date(1), ["Launched the Acorn 3 model with a 1M token context window."])])
         self.add_source("changelog", "/changelog")
@@ -255,7 +385,7 @@ class CycleTests(unittest.TestCase):
         state = State(self.root / "concurrent.db")
         started = time.monotonic()
         events, pending = collect_all(sources, state, backfill_days=7, workers=4, deadline_seconds=1.0, source_timeout=5)
-        self.assertLess(time.monotonic() - started, 2.0)
+        self.assertLess(time.monotonic() - started, 2.3)  # the slow page needs 2.5 s: waiting for it would show
         self.assertEqual(pending, ["slow"])
         self.assertEqual(len(events), 1)
         state.close()

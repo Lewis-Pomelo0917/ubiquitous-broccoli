@@ -1,5 +1,5 @@
 {
-  "description": "Home-card selection shared by the Python worker and the frontend; keep both in step.",
+  "description": "Home-card selection shared by the Python worker and the frontend; keep both in step. 'cases' use the machine's zone (they hold in any zone); 'zone_cases' name an explicit UTC offset so day-boundary and window-edge mistakes show up whatever zone the check runs in.",
   "events": [
     {
       "key": "k1",
@@ -157,6 +157,236 @@
       "expected": [
         "k8"
       ]
+    }
+  ],
+  "zone_events": [
+    {
+      "key": "p1-age7",
+      "priority": "P1",
+      "published_at": "2026-10-19T00:00:00+00:00",
+      "title": "P1 week-old",
+      "confidence": 0.9,
+      "discovered_at": "2026-10-26T01:00:00+00:00",
+      "event_type": "release",
+      "evidence": "P1 week-old",
+      "source_id": "s",
+      "url": "https://example.com",
+      "status": "confirmed"
+    },
+    {
+      "key": "p1-age8",
+      "priority": "P1",
+      "published_at": "2026-10-18T00:00:00+00:00",
+      "title": "P1 eight days",
+      "confidence": 0.9,
+      "discovered_at": "2026-10-26T01:00:00+00:00",
+      "event_type": "release",
+      "evidence": "P1 eight days",
+      "source_id": "s",
+      "url": "https://example.com",
+      "status": "confirmed"
+    },
+    {
+      "key": "p0-age8",
+      "priority": "P0",
+      "published_at": "2026-10-18T00:00:00+00:00",
+      "title": "P0 eight days",
+      "confidence": 0.99,
+      "discovered_at": "2026-10-26T01:00:00+00:00",
+      "event_type": "release",
+      "evidence": "P0 eight days",
+      "source_id": "s",
+      "url": "https://example.com",
+      "status": "confirmed"
+    },
+    {
+      "key": "p3-age3",
+      "priority": "P3",
+      "published_at": "2026-10-23T00:00:00+00:00",
+      "title": "P3 three days",
+      "confidence": 0.9,
+      "discovered_at": "2026-10-26T01:00:00+00:00",
+      "event_type": "release",
+      "evidence": "P3 three days",
+      "source_id": "s",
+      "url": "https://example.com",
+      "status": "confirmed"
+    },
+    {
+      "key": "p3-age4",
+      "priority": "P3",
+      "published_at": "2026-10-22T00:00:00+00:00",
+      "title": "P3 four days",
+      "confidence": 0.9,
+      "discovered_at": "2026-10-26T01:00:00+00:00",
+      "event_type": "release",
+      "evidence": "P3 four days",
+      "source_id": "s",
+      "url": "https://example.com",
+      "status": "confirmed"
+    },
+    {
+      "key": "u-p2-late",
+      "priority": "P2",
+      "published_at": "",
+      "title": "P2 found late evening",
+      "confidence": 0.9,
+      "discovered_at": "2026-10-22T20:00:00+00:00",
+      "event_type": "release",
+      "evidence": "P2 found late evening",
+      "source_id": "s",
+      "url": "https://example.com",
+      "status": "confirmed"
+    },
+    {
+      "key": "a-old-high",
+      "priority": "P1",
+      "published_at": "2026-10-21T00:00:00+00:00",
+      "title": "Order A",
+      "confidence": 0.95,
+      "discovered_at": "2026-10-26T01:00:00+00:00",
+      "event_type": "release",
+      "evidence": "Order A",
+      "source_id": "s",
+      "url": "https://example.com",
+      "status": "confirmed"
+    },
+    {
+      "key": "b-new-low",
+      "priority": "P1",
+      "published_at": "2026-10-25T00:00:00+00:00",
+      "title": "Order B",
+      "confidence": 0.6,
+      "discovered_at": "2026-10-26T01:00:00+00:00",
+      "event_type": "release",
+      "evidence": "Order B",
+      "source_id": "s",
+      "url": "https://example.com",
+      "status": "confirmed"
+    }
+  ],
+  "zone_cases": [
+    {
+      "name": "UTC",
+      "now": "2026-10-26T12:00:00+00:00",
+      "tz_offset_minutes": 0,
+      "limit": 10,
+      "expected": [
+        "b-new-low",
+        "a-old-high",
+        "p1-age7",
+        "p3-age3"
+      ]
+    },
+    {
+      "name": "UTC+8: a late-evening discovery belongs to the next local day",
+      "now": "2026-10-26T12:00:00+00:00",
+      "tz_offset_minutes": 480,
+      "limit": 10,
+      "expected": [
+        "b-new-low",
+        "a-old-high",
+        "p1-age7",
+        "u-p2-late",
+        "p3-age3"
+      ]
+    },
+    {
+      "name": "UTC-8: a published date is a calendar date, not a moment",
+      "now": "2026-10-26T12:00:00+00:00",
+      "tz_offset_minutes": -480,
+      "limit": 10,
+      "expected": [
+        "b-new-low",
+        "a-old-high",
+        "p1-age7",
+        "p3-age3"
+      ]
+    },
+    {
+      "name": "UTC+14: today is already the next day",
+      "now": "2026-10-26T12:00:00+00:00",
+      "tz_offset_minutes": 840,
+      "limit": 10,
+      "expected": [
+        "b-new-low",
+        "a-old-high"
+      ]
+    },
+    {
+      "name": "UTC+8 one minute before local midnight",
+      "now": "2026-10-26T15:59:00+00:00",
+      "tz_offset_minutes": 480,
+      "limit": 10,
+      "expected": [
+        "b-new-low",
+        "a-old-high",
+        "p1-age7",
+        "u-p2-late",
+        "p3-age3"
+      ]
+    },
+    {
+      "name": "UTC+8 one minute after local midnight",
+      "now": "2026-10-26T16:01:00+00:00",
+      "tz_offset_minutes": 480,
+      "limit": 10,
+      "expected": [
+        "b-new-low",
+        "a-old-high"
+      ]
+    }
+  ],
+  "summary_cases": [
+    {
+      "title": "Acorn 3 launches!",
+      "summary": "Acorn 3 launches",
+      "hidden": true
+    },
+    {
+      "title": "Introducing Acorn 3",
+      "summary": "Introducing Acorn 3, our most capable model, now available in the API.",
+      "hidden": false
+    },
+    {
+      "title": "Acorn 3 launches",
+      "summary": "Acorn 3 launches with a 1M token context window",
+      "hidden": false
+    },
+    {
+      "title": "Acorn 3 is a very capable model for coding",
+      "summary": "very capable model",
+      "hidden": true
+    },
+    {
+      "title": "Acorn 3",
+      "summary": "Acorn 3 now",
+      "hidden": true
+    },
+    {
+      "title": "Acorn 3",
+      "summary": "",
+      "hidden": true
+    },
+    {
+      "title": "",
+      "summary": "Something new here",
+      "hidden": false
+    },
+    {
+      "title": "Straße update",
+      "summary": "STRASSE UPDATE",
+      "hidden": false
+    },
+    {
+      "title": "ﬁnal results",
+      "summary": "final results",
+      "hidden": false
+    },
+    {
+      "title": "模型发布",
+      "summary": "今天发布了新一代模型",
+      "hidden": false
     }
   ]
 }

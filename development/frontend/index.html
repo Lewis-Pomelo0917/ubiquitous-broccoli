@@ -1999,9 +1999,9 @@
       transition: background .15s ease, border-color .15s ease, color .15s ease;
     }
     .home-ai-refresh[hidden] { display: none; }
-    .home-ai-refresh:hover:not(:disabled) { border-color: var(--line); background: var(--surface-soft); color: var(--text); }
+    .home-ai-refresh:hover:not([aria-disabled="true"]) { border-color: var(--line); background: var(--surface-soft); color: var(--text); }
     .home-ai-refresh:focus-visible { outline: 0; box-shadow: var(--focus-ring); }
-    .home-ai-refresh:disabled { cursor: default; opacity: .6; }
+    .home-ai-refresh[aria-disabled="true"] { cursor: default; opacity: .6; }
     .home-ai-refresh.is-busy svg { animation: home-ai-spin 1s linear infinite; }
     @keyframes home-ai-spin { to { transform: rotate(360deg); } }
     .home-ai-empty-detail { padding: 2px 8px 6px; color: var(--muted); font-size: 11px; line-height: 1.5; text-align: center; }
@@ -6459,7 +6459,10 @@
       const aiFeedPriority = (value) => Object.prototype.hasOwnProperty.call(aiFeedPriorityOrder, aiFeedText(value)) ? aiFeedText(value) : 'P3';
       const aiFeedDate = (value) => {
         if (typeof value !== 'string' || !value.trim()) return null;
-        const date = new Date(value);
+        const text = value.trim();
+        // A timestamp without a zone is UTC, as the worker reads it; Date would take it as local time.
+        const zoneless = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(text);
+        const date = new Date(zoneless ? text.replace(' ', 'T') + 'Z' : text);
         return Number.isNaN(date.getTime()) ? null : date;
       };
       const aiFeedWindowDays = { P0: 7, P1: 7, P2: 3, P3: 3 };
@@ -6469,24 +6472,35 @@
         policy: '政策', compute: '算力', tool: '工具', research: '研究', content_change: '更新'
       };
       const aiFeedDayNumber = (year, monthIndex, day) => Math.floor(Date.UTC(year, monthIndex, day) / 86400000);
-      const aiFeedEventDay = (event) => {
+      // The calendar day of a moment in the machine's zone; offsetMinutes stands in for it in the shared fixture check.
+      const aiFeedLocalDay = (date, offsetMinutes) => {
+        if (Number.isFinite(offsetMinutes)) {
+          const shifted = new Date(date.getTime() + offsetMinutes * 60000);
+          return aiFeedDayNumber(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate());
+        }
+        return aiFeedDayNumber(date.getFullYear(), date.getMonth(), date.getDate());
+      };
+      const aiFeedEventDay = (event, offsetMinutes) => {
         const published = aiFeedDate(event.published_at);
         if (published) return aiFeedDayNumber(published.getUTCFullYear(), published.getUTCMonth(), published.getUTCDate());
         const discovered = aiFeedDate(event.discovered_at);
-        return discovered ? aiFeedDayNumber(discovered.getFullYear(), discovered.getMonth(), discovered.getDate()) : null;
+        return discovered ? aiFeedLocalDay(discovered, offsetMinutes) : null;
       };
       const aiFeedNormalize = (value) => aiFeedText(value).toLowerCase().replace(/[^\p{L}\p{N}_]+/gu, ' ').trim();
-      const aiFeedSimilar = (left, right) => {
-        const first = aiFeedNormalize(left);
-        const second = aiFeedNormalize(right);
-        return Boolean(first) && Boolean(second) && (first.includes(second) || second.includes(first));
+      // True when a summary adds nothing to its headline; the worker applies the same test (repeats_title).
+      const aiFeedRepeatsTitle = (summary, title) => {
+        const key = aiFeedNormalize(summary);
+        const head = aiFeedNormalize(title);
+        if (!key) return true;
+        const size = (value) => Array.from(value).length;
+        return Boolean(head) && (key === head || head.includes(key) || (key.includes(head) && size(key) <= size(head) + 12));
       };
-      const aiFeedDisplayEvents = (events, now = new Date(), limit = 3) => {
-        const today = aiFeedDayNumber(now.getFullYear(), now.getMonth(), now.getDate());
+      const aiFeedDisplayEvents = (events, now = new Date(), limit = 3, offsetMinutes) => {
+        const today = aiFeedLocalDay(now, offsetMinutes);
         const ranked = events
           .filter((event) => event && typeof event === 'object')
           .map((event) => {
-            const day = aiFeedEventDay(event);
+            const day = aiFeedEventDay(event, offsetMinutes);
             const discovered = aiFeedDate(event.discovered_at);
             return {
               event,
@@ -6513,22 +6527,30 @@
         }
         return chosen;
       };
-      const aiFeedDayLabel = (event, now = new Date()) => {
-        const day = aiFeedEventDay(event);
+      const aiFeedDayLabel = (event, now = new Date(), offsetMinutes) => {
+        const day = aiFeedEventDay(event, offsetMinutes);
         if (day === null) return '';
-        const diff = aiFeedDayNumber(now.getFullYear(), now.getMonth(), now.getDate()) - day;
+        const diff = aiFeedLocalDay(now, offsetMinutes) - day;
         if (diff === 0) return '今天';
         if (diff === 1) return '昨天';
         if (diff > 1 && diff < 7) return diff + ' 天前';
         const date = new Date(day * 86400000);
         return (date.getUTCMonth() + 1) + '月' + date.getUTCDate() + '日' + (diff < 0 ? '生效' : '');
       };
+      const aiFeedEvidenceAfterTitle = (evidence, title) => {
+        const head = aiFeedText(title).replace(/…+$/, '').trim();
+        if (head && evidence.startsWith(head)) {
+          const rest = evidence.slice(head.length).replace(/^[\s.:;–—-]+/, '');
+          if (rest) return rest;
+        }
+        return evidence;
+      };
       const aiFeedSummaryText = (event) => {
         const evidence = aiFeedText(event.evidence);
         const summary = aiFeedText(event.summary);
         const trusted = (event.summary_mode === 'extractive-v1' || event.summary_mode === 'rule-v1') && summary && evidence.includes(summary);
-        const text = trusted ? summary : evidence.slice(0, 180);
-        return aiFeedSimilar(text, event.title) ? '' : text;
+        const text = trusted ? summary : aiFeedEvidenceAfterTitle(evidence, event.title).slice(0, 180);
+        return aiFeedRepeatsTitle(text, event.title) ? '' : text;
       };
       const aiFeedStatusText = (status) => {
         if (!status || typeof status !== 'object') return '近期';
@@ -6540,7 +6562,8 @@
         };
         const label = labels[state] || '近期';
         const lastSuccess = aiFeedDate(status.last_success_at);
-        const stale = lastSuccess && Date.now() - lastSuccess.getTime() > 86400000;
+        // Updates run once a day (from the cycle's start): a day plus a morning's slack before data counts as old.
+        const stale = lastSuccess && Date.now() - lastSuccess.getTime() > 36 * 3600000;
         if (stale && state === 'updating') return '更新中 · 旧数据';
         if (stale && state === 'failed') return '失败 · 过期';
         if (stale && state === 'partial') return '部分失败 · 过期';
@@ -6589,8 +6612,15 @@
           return '';
         }
       };
-      const renderHomeAi = () => {
+      // The card is built off-screen and swapped in only when it differs, so the 5 s poll that follows an
+      // update neither drops keyboard focus from a link nor makes the live region read the card again.
+      const commitHomeAi = (next) => {
+        if (next.innerHTML === homeAiEvents.innerHTML) return;
         while (homeAiEvents.firstChild) homeAiEvents.removeChild(homeAiEvents.firstChild);
+        while (next.firstChild) homeAiEvents.appendChild(next.firstChild);
+      };
+      const renderHomeAi = () => {
+        const next = document.createElement('div');
         if (homeAiStatus) {
           homeAiStatus.textContent = aiFeedStatusText(aiFeedState.status);
           homeAiStatus.title = aiFeedStatusTitle(aiFeedState.status);
@@ -6598,19 +6628,22 @@
         if (homeAiRefresh) {
           const busy = aiFeedBusy(aiFeedState.status);
           homeAiRefresh.hidden = !aiFeedCanRefresh() || aiFeedText(aiFeedState.status && aiFeedState.status.state) === 'unsupported';
-          homeAiRefresh.disabled = busy;
+          // aria-disabled, not disabled: a disabled button would drop the focus of a keyboard user who just pressed it.
+          homeAiRefresh.setAttribute('aria-disabled', busy ? 'true' : 'false');
           homeAiRefresh.classList.toggle('is-busy', busy);
           homeAiRefresh.setAttribute('aria-busy', busy ? 'true' : 'false');
         }
         if (aiFeedState.loading && !aiFeedState.feed) {
-          homeAiEvents.innerHTML = '<div class="home-ai-empty">正在读取…</div>';
+          next.innerHTML = '<div class="home-ai-empty">正在读取…</div>';
+          commitHomeAi(next);
           return;
         }
         if (aiFeedState.error) {
           const empty = document.createElement('div');
           empty.className = 'home-ai-empty is-error';
           empty.textContent = 'AI 情报暂不可用';
-          homeAiEvents.appendChild(empty);
+          next.appendChild(empty);
+          commitHomeAi(next);
           return;
         }
         const events = aiFeedVisibleEvents();
@@ -6627,14 +6660,15 @@
                 : state === 'no_new_items'
                   ? '检查完成，近期暂无重要情报'
                   : '近期暂无可展示的情报';
-          homeAiEvents.appendChild(empty);
+          next.appendChild(empty);
           const detail = aiFeedFailureSummary(aiFeedState.status);
           if (detail) {
             const hint = document.createElement('div');
             hint.className = 'home-ai-empty-detail';
             hint.textContent = detail;
-            homeAiEvents.appendChild(hint);
+            next.appendChild(hint);
           }
+          commitHomeAi(next);
           return;
         }
         const now = new Date();
@@ -6692,7 +6726,8 @@
           }
           fragment.appendChild(article);
         });
-        homeAiEvents.appendChild(fragment);
+        next.appendChild(fragment);
+        commitHomeAi(next);
       };
       let aiFeedFastTimer = 0;
       const aiFeedFollowUp = () => {
@@ -6738,8 +6773,8 @@
       };
       if (homeAiRefresh) {
         homeAiRefresh.addEventListener('click', async () => {
-          if (!aiFeedCanRefresh() || homeAiRefresh.disabled) return;
-          homeAiRefresh.disabled = true;
+          if (!aiFeedCanRefresh() || homeAiRefresh.getAttribute('aria-disabled') === 'true') return;
+          homeAiRefresh.setAttribute('aria-disabled', 'true');
           homeAiRefresh.classList.add('is-busy');
           try {
             await window.__TAURI__.core.invoke('refresh_ai_news');

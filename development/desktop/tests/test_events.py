@@ -1,4 +1,3 @@
-import sqlite3
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -9,12 +8,15 @@ from ai_radar.core import (
     SNAPSHOT_FORMAT,
     Source,
     State,
+    _STRONG_UNCERTAIN,
     _backfill_segments,
     _clean_body,
     _diff_segments,
+    _first_sentence,
     _headline,
     _parse_date,
     _priority,
+    _site,
     classify_all,
     collect_events,
     visible_text,
@@ -48,6 +50,22 @@ class ClassificationTests(unittest.TestCase):
         self.assertIn("release", kinds("Introducing Acorn 3, now available"))
         self.assertIn("policy", kinds("EU AI Act compliance deadline"))
         self.assertIn("deprecation", kinds("该模型将下线并停止支持"))
+
+
+    def test_leak_is_a_rumour_marker_only_in_its_news_sense(self):
+        for text in (
+            "Launched the Acorn 3 model; the release also fixes a memory leak in the API server.",
+            "API keys leaked through the logging endpoint were rotated.",
+            "Fixed memory leak",
+        ):
+            self.assertIsNone(_STRONG_UNCERTAIN.search(text), text)
+        for text in (
+            "Leaked benchmark screenshots suggest Acorn 4 is close.",
+            "A leak suggests Acorn 4 ships next week.",
+            "according to a leak, Acorn 4 arrives soon",
+            "Acorn leaker claims a new model",
+        ):
+            self.assertIsNotNone(_STRONG_UNCERTAIN.search(text), text)
 
 
 class DateParsingTests(unittest.TestCase):
@@ -113,6 +131,12 @@ class SegmentTests(unittest.TestCase):
         self.assertIn("Launched Acorn 3", "\n".join(segments[0][1]))
 
 
+    def test_a_price_that_changed_alone_borrows_the_label_above_it(self):
+        before = page("Acorn Pro", "$4 / MTok", "Acorn Mini", "$1 / MTok")
+        after = page("Acorn Pro", "$5 / MTok", "Acorn Mini", "$1 / MTok")
+        self.assertEqual(_diff_segments(before, after), [("", ["Acorn Pro", "$5 / MTok"])])
+
+
 class EventTextTests(unittest.TestCase):
     def test_body_drops_date_heading_and_boilerplate_but_keeps_content(self):
         lines = ["Oct 22, 2026 · Announcements", "Copy page", "Introducing Acorn 3", "Read more", "Acorn 3 is our most capable model.", "Introducing Acorn 3"]
@@ -126,6 +150,22 @@ class EventTextTests(unittest.TestCase):
         self.assertTrue(title.startswith("We've launched Acorn 3"))
         self.assertLessEqual(len(title), 111)
         self.assertNotIn("More text", title)
+
+    def test_sites_on_shared_hosting_are_told_apart(self):
+        self.assertEqual(_site("https://docs.example.com/a"), _site("https://www.example.com/b"))
+        self.assertEqual(_site("https://news.example.co.uk/a"), "example.co.uk")
+        self.assertNotEqual(_site("https://acorn.github.io/blog"), _site("https://other.github.io/blog"))
+        self.assertEqual(_site("https://acorn.github.io/blog"), _site("https://acorn.github.io/news"))
+
+    def test_a_label_and_its_number_read_as_one_headline(self):
+        self.assertEqual(_headline(["Acorn Pro", "$5 / MTok"]), "Acorn Pro — $5 / MTok")
+        self.assertEqual(_headline(["Introducing Acorn 3", "Acorn 3 is here."]), "Introducing Acorn 3")
+
+    def test_chinese_text_is_cut_at_full_stops_and_counts_double_for_length(self):
+        text = "今天发布了新一代模型，支持更长上下文。价格同步下调百分之二十。"
+        self.assertEqual(_first_sentence(text), "今天发布了新一代模型，支持更长上下文。")
+        self.assertEqual(_headline([text]), "今天发布了新一代模型，支持更长上下文。")
+        self.assertEqual(_first_sentence("已发布。支持更长上下文和工具调用。再次下调价格。"), "已发布。支持更长上下文和工具调用。")
 
     def test_release_priority_depends_on_whether_a_model_is_involved(self):
         self.assertEqual(_priority("P1", "release"), "P0")
@@ -247,6 +287,97 @@ class CollectionTests(unittest.TestCase):
             collect_events(status, self.state, force=True)
             events = collect_events(status, self.state, force=True)
         self.assertEqual([event.event_type for event in events], ["security"])
+
+
+    def test_a_memory_leak_fix_in_a_release_is_still_a_confirmed_release(self):
+        text = "Launched the Acorn 3 model; the release also fixes a memory leak in the API server."
+        with fetch_returning("Initial page about acorn", text):
+            collect_events(source(), self.state, force=True)
+            events = collect_events(source(), self.state, force=True)
+        self.assertEqual((events[0].priority, events[0].status), ("P0", "confirmed"))
+
+    def test_a_pricing_page_reports_a_changed_price_without_any_keyword(self):
+        pricing = source(id="pricing", category="pricing", provider="Acorn")
+        with fetch_returning(page("Acorn Pro", "$4 / MTok", "Acorn Mini", "$1 / MTok"), page("Acorn Pro", "$5 / MTok", "Acorn Mini", "$1 / MTok")):
+            collect_events(pricing, self.state, force=True)
+            events = collect_events(pricing, self.state, force=True)
+        self.assertEqual([(event.event_type, event.title) for event in events], [("pricing", "Acorn Pro — $5 / MTok")])
+
+
+def html_pages(*pages):
+    return patch("ai_radar.core._fetch", side_effect=[
+        (200, visible_text(body.encode("utf-8"), "text/html", "https://news.example.com/"), {}) for body in pages
+    ])
+
+
+def entry(title, when, summary):
+    return f'<article><h3><a href="/p/{title.split()[-1].lower()}">{title}</a></h3><div class="meta">{when}</div><p>{summary}</p></article>'
+
+
+class ListingLayoutTests(unittest.TestCase):
+    ITEMS = (
+        ("Introducing Acorn 3", day(1), "Acorn 3 is our most capable model, now available in the API with a 1M token context."),
+        ("Acorn pricing update", day(2), "We have lowered the price of the Acorn Mini model to $0.50 per million tokens."),
+        ("Evaluation results", day(3), "New evaluation results show Acorn 3 leads on agentic coding benchmarks."),
+    )
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.state = State(Path(self.directory.name) / "state.db")
+        self.source = source(id="listing", url="https://news.example.com/", category="models")
+
+    def tearDown(self):
+        self.state.close()
+        self.directory.cleanup()
+
+    def collect(self, *pages):
+        events = []
+        with html_pages(*pages):
+            for _ in pages:
+                events = collect_events(self.source, self.state, backfill_days=7, force=True)
+        return events
+
+    def test_a_headline_above_its_date_stays_with_its_own_entry(self):
+        events = self.collect("<main>" + "".join(entry(*item) for item in self.ITEMS) + "</main>")
+        by_title = {event.title: event for event in events}
+        self.assertEqual(set(by_title), {item[0] for item in self.ITEMS})
+        for title, when, _ in self.ITEMS:
+            self.assertEqual(by_title[title].published_at[:10], _parse_date(when).strftime("%Y-%m-%d"))
+            self.assertEqual(by_title[title].evidence.splitlines()[0], title)
+
+    def test_a_new_entry_with_its_headline_above_the_date_is_one_event(self):
+        old = "<main>" + "".join(entry(*item) for item in self.ITEMS) + "</main>"
+        new = entry("Acorn 4 preview", day(0), "We are launching a preview of the Acorn 4 model for all API customers today.")
+        events = self.collect(old, "<main>" + new + old[len("<main>"):])
+        self.assertEqual([event.title for event in events], ["Acorn 4 preview"])
+        self.assertEqual(events[0].published_at[:10], _parse_date(day(0)).strftime("%Y-%m-%d"))
+
+    def test_listings_that_start_with_the_date_read_as_before(self):
+        dated_first = "".join(
+            f"<article><time>{when}</time><h3>{title}</h3><p>{summary}</p></article>" for title, when, summary in self.ITEMS
+        )
+        events = self.collect("<main>" + dated_first + "</main>")
+        self.assertEqual({event.title for event in events}, {item[0] for item in self.ITEMS})
+
+    def test_a_single_dated_section_in_a_page_wide_article_is_not_a_listing(self):
+        body = f"<article><h1>Release notes</h1><h2>{day(1)}</h2><ul><li>Launched the Acorn 3 model with a 1M token context.</li></ul></article>"
+        events = self.collect(body)
+        self.assertEqual([event.title for event in events], ["Launched the Acorn 3 model with a 1M token context."])
+
+    def test_a_category_label_above_the_date_belongs_to_the_entry_below_it(self):
+        def card(label, when, title, body):
+            return (f'<article><header><p><a href="/n/{label.lower()}">{label}</a></p><time>{when}</time></header>'
+                    f'<a href="/n/{title.split()[-1].lower()}"><h2>{title}</h2><p>{body}</p></a></article>')
+        cards = (
+            card("Announcements", day(1), "Introducing Acorn 3", "Acorn 3 is our most capable model, now available in the API."),
+            card("Pricing", day(2), "Lower prices for Acorn Mini", "We have lowered the price of the Acorn Mini model to $0.50 per million tokens."),
+            card("Features", day(3), "Acorn gets tool search", "Tool search lets Acorn find the right tool in very large tool catalogs."),
+        )
+        events = {event.title: event for event in self.collect("<main>" + "".join(cards) + "</main>")}
+        self.assertEqual(events["Introducing Acorn 3"].evidence.splitlines()[0], "Announcements")
+        self.assertEqual(events["Introducing Acorn 3"].evidence.splitlines()[-1], "Acorn 3 is our most capable model, now available in the API.")
+        self.assertEqual(events["Lower prices for Acorn Mini"].evidence.splitlines()[0], "Pricing")
+        self.assertEqual(events["Lower prices for Acorn Mini"].event_type, "pricing")
 
 
 class SnapshotMigrationTests(unittest.TestCase):

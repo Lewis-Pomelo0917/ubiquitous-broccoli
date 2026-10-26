@@ -581,9 +581,16 @@ fn validate_feed_bytes(bytes: &[u8]) -> Result<(), String> {
 fn seed_feed_if_missing(runtime: &Path, app_data: &Path) -> Result<(), String> {
     let feed_path = app_data.join("ai-intelligence.json");
     if feed_path.exists() {
-        let bytes = fs::read(&feed_path).map_err(|error| format!("无法读取本机情报：{error}"))?;
-        validate_feed_bytes(&bytes)?;
-        return Ok(());
+        match fs::read(&feed_path) {
+            Ok(bytes) if validate_feed_bytes(&bytes).is_ok() => return Ok(()),
+            Ok(_) => {
+                // A damaged feed must not stop updates for good: set it aside and start from the packaged
+                // seed; the worker rebuilds the news from its own database on the next run.
+                let aside = app_data.join(format!("ai-intelligence.json.corrupt-{}", current_unix()));
+                fs::rename(&feed_path, &aside).map_err(|error| format!("无法移开损坏的本机情报：{error}"))?;
+            }
+            Err(error) => return Err(format!("无法读取本机情报：{error}")),
+        }
     }
     let seed = fs::read(runtime.join("feed").join("initial-ai-intelligence.json"))
         .map_err(|error| format!("完整包缺少初始情报：{error}"))?;
@@ -622,11 +629,12 @@ fn should_run(status: &WatchStatus) -> bool {
     }
     let now = current_unix();
     // The worker records when the next update is due: tomorrow morning after a good run,
-    // sooner (with backoff) after trouble. Ignore values that are implausibly far away.
-    if let Some(due) = status.extra.get("next_due_unix").and_then(Value::as_u64) {
-        if due <= now.saturating_add(7 * 86_400) {
-            return now >= due;
-        }
+    // sooner (with backoff) after trouble. A status without a schedule was written by an earlier
+    // release: check once now and let the worker set one.
+    match status.extra.get("next_due_unix").and_then(Value::as_u64) {
+        Some(due) if due <= now.saturating_add(7 * 86_400) => return now >= due,
+        None => return true,
+        Some(_) => {} // implausibly far away (clock trouble): fall back to the fixed rules below
     }
     if status.state == "failed" || status.state == "partial" {
         return status.last_attempt_unix.map(|value| now.saturating_sub(value) >= 3600).unwrap_or(true);
@@ -749,9 +757,10 @@ fn scheduler_loop(app: AppHandle) {
             return;
         }
     };
-    let runtime = match ensure_runtime(&executable, &data_dir).and_then(|path| {
-        seed_feed_if_missing(&path, &data_dir)?;
-        Ok(path)
+    let runtime = match ensure_runtime(&executable, &data_dir).map(|path| {
+        // The seed only fills the card before the first update; the worker writes the feed itself.
+        let _ = seed_feed_if_missing(&path, &data_dir);
+        path
     }) {
         Ok(path) => path,
         Err(error) => {
@@ -813,8 +822,28 @@ fn scheduler_loop(app: AppHandle) {
     }
 }
 
+/// Why a worker run ended without a result: a short message for the card, and what the worker printed.
+struct WorkerFailure {
+    message: String,
+    detail: Option<String>,
+}
+
+impl From<String> for WorkerFailure {
+    fn from(message: String) -> Self {
+        Self { message, detail: None }
+    }
+}
+
+/// The last `max_chars` characters of process output, for the failure detail.
+fn tail_text(bytes: &[u8], max_chars: usize) -> String {
+    let text = String::from_utf8_lossy(bytes);
+    let mut tail: Vec<char> = text.trim().chars().rev().take(max_chars).collect();
+    tail.reverse();
+    tail.into_iter().collect()
+}
+
 /// Record that the worker ended without publishing a result, and back off before the next try.
-fn mark_worker_failure(status: &mut WatchStatus, reason: Option<String>) {
+fn mark_worker_failure(status: &mut WatchStatus, failure: Option<WorkerFailure>) {
     let failures = status
         .extra
         .get("consecutive_failures")
@@ -823,7 +852,15 @@ fn mark_worker_failure(status: &mut WatchStatus, reason: Option<String>) {
         .saturating_add(1);
     let delay = (1800u64.saturating_mul(1u64 << failures.saturating_sub(1).min(4))).min(6 * 3600);
     status.state = "failed".to_string();
-    status.message = reason.unwrap_or_else(|| "本机更新异常结束；最近成功情报已保留".to_string());
+    status.message = match failure {
+        Some(failure) => {
+            if let Some(detail) = failure.detail.filter(|detail| !detail.is_empty()) {
+                status.extra.insert("error_detail".to_string(), Value::from(detail));
+            }
+            failure.message
+        }
+        None => "本机更新异常结束；最近成功情报已保留".to_string(),
+    };
     status.extra.insert("consecutive_failures".to_string(), Value::from(failures));
     status
         .extra
@@ -834,7 +871,7 @@ fn mark_worker_failure(status: &mut WatchStatus, reason: Option<String>) {
 const WORKER_TIMEOUT: Duration = Duration::from_secs(35 * 60);
 
 #[cfg(windows)]
-fn run_worker(runtime: &Path, data_dir: &Path) -> Result<(), String> {
+fn run_worker(runtime: &Path, data_dir: &Path) -> Result<(), WorkerFailure> {
     let python = runtime.join("python").join("python.exe");
     let runner = Path::new("llama").join("llama-completion.exe");
     let model = Path::new("model").join("Qwen3-0.6B-Q4_0.gguf");
@@ -883,7 +920,7 @@ fn run_worker(runtime: &Path, data_dir: &Path) -> Result<(), String> {
         let mut child = child;
         let _ = child.kill();
         let _ = child.wait();
-        return Err(error);
+        return Err(error.into());
     }
     // Wait on a helper thread so a hung worker cannot block the scheduler forever.
     let (sender, receiver) = std::sync::mpsc::channel();
@@ -894,21 +931,26 @@ fn run_worker(runtime: &Path, data_dir: &Path) -> Result<(), String> {
         Ok(result) => result.map_err(|error| format!("本机采集组件异常结束：{error}"))?,
         Err(_) => {
             drop(job); // closing the job terminates the worker and any model process it started
-            return Err("本机更新超时，已终止；最近成功情报已保留".to_string());
+            return Err("本机更新超时，已终止；最近成功情报已保留".to_string().into());
         }
     };
     if !output.status.success() {
         let state = load_status(&status).ok();
         if state.as_ref().map(|value| value.state.as_str()) != Some("failed") {
-            return Err("本机采集或模型校验失败；最近成功情报已保留".to_string());
+            // The worker died before it could report: keep what it printed so the cause is not lost.
+            let printed = if output.stderr.iter().any(|byte| !byte.is_ascii_whitespace()) { &output.stderr } else { &output.stdout };
+            return Err(WorkerFailure {
+                message: "本机采集或模型校验失败；最近成功情报已保留".to_string(),
+                detail: Some(tail_text(printed, 300)),
+            });
         }
     }
     Ok(())
 }
 
 #[cfg(not(windows))]
-fn run_worker(_runtime: &Path, _data_dir: &Path) -> Result<(), String> {
-    Err("本地模型更新当前仅支持 Windows x64".to_string())
+fn run_worker(_runtime: &Path, _data_dir: &Path) -> Result<(), WorkerFailure> {
+    Err("本地模型更新当前仅支持 Windows x64".to_string().into())
 }
 
 #[cfg(windows)]
@@ -1046,15 +1088,25 @@ mod schedule_tests {
     }
 
     #[test]
-    fn interrupted_or_preparing_always_runs_and_old_statuses_keep_the_fixed_rules() {
+    fn interrupted_or_preparing_always_runs_and_a_status_without_a_schedule_is_due_once() {
         let now = current_unix();
         for state in ["interrupted", "preparing"] {
             let mut status = status_from(r#"{}"#);
             status.state = state.into();
             assert!(should_run(&status));
         }
+        // Written by an earlier release (no next_due_unix): refresh once, whatever the last attempt said.
         let mut failed = status_from(r#"{"state":"failed"}"#);
         failed.last_attempt_unix = Some(now - 600);
+        assert!(should_run(&failed));
+        let mut updated = status_from(r#"{"state":"updated"}"#);
+        updated.last_success_unix = Some(now - 600);
+        assert!(should_run(&updated));
+        // Once the worker has set a schedule, that schedule decides.
+        updated.extra.insert("next_due_unix".into(), Value::from(now + 3600));
+        assert!(!should_run(&updated));
+        // A schedule that is implausibly far away falls back to the fixed rules.
+        failed.extra.insert("next_due_unix".into(), Value::from(now + 90 * 86_400));
         assert!(!should_run(&failed));
         failed.last_attempt_unix = Some(now - 4000);
         assert!(should_run(&failed));
@@ -1066,7 +1118,7 @@ mod schedule_tests {
         let before = current_unix();
         let mut delays = Vec::new();
         for _ in 0..7 {
-            mark_worker_failure(&mut status, Some("本机采集组件无法启动".to_string()));
+            mark_worker_failure(&mut status, Some("本机采集组件无法启动".to_string().into()));
             assert_eq!(status.state, "failed");
             assert_eq!(status.message, "本机采集组件无法启动");
             delays.push(status.extra["next_due_unix"].as_u64().unwrap() - before);
@@ -1077,6 +1129,49 @@ mod schedule_tests {
         assert_eq!(status.extra["consecutive_failures"], 7);
         mark_worker_failure(&mut status, None);
         assert!(status.message.contains("异常结束"));
+    }
+
+    #[test]
+    fn what_the_worker_printed_is_kept_as_the_failure_detail() {
+        let mut status = status_from(r#"{"state":"updating"}"#);
+        let failure = WorkerFailure { message: "本机采集或模型校验失败".to_string(), detail: Some(tail_text(b"Traceback...\nPermissionError: [WinError 5]\n", 300)) };
+        mark_worker_failure(&mut status, Some(failure));
+        assert_eq!(status.message, "本机采集或模型校验失败");
+        assert_eq!(status.extra["error_detail"], "Traceback...\nPermissionError: [WinError 5]");
+        assert_eq!(tail_text("0123456789".as_bytes(), 4), "6789");
+        assert_eq!(tail_text("模型更新失败了".as_bytes(), 3), "失败了");
+        assert_eq!(tail_text(b"   ", 10), "");
+        let mut plain = status_from(r#"{"state":"updating"}"#);
+        mark_worker_failure(&mut plain, Some("超时".to_string().into()));
+        assert!(plain.extra.get("error_detail").is_none());
+    }
+
+    #[test]
+    fn a_damaged_feed_is_set_aside_and_replaced_by_the_packaged_seed() {
+        let root = std::env::temp_dir().join(format!("cubic-feed-test-{}-{}", std::process::id(), current_unix()));
+        let runtime = root.join("runtime");
+        let app_data = root.join("data");
+        fs::create_dir_all(runtime.join("feed")).unwrap();
+        fs::create_dir_all(&app_data).unwrap();
+        let seed = br#"{"version":1,"events":[]}"#;
+        fs::write(runtime.join("feed").join("initial-ai-intelligence.json"), seed).unwrap();
+        let feed = app_data.join("ai-intelligence.json");
+
+        fs::write(&feed, b"{ truncated").unwrap();
+        seed_feed_if_missing(&runtime, &app_data).expect("a damaged feed is replaced, not fatal");
+        assert_eq!(fs::read(&feed).unwrap(), seed.to_vec());
+        let aside: Vec<_> = fs::read_dir(&app_data).unwrap().filter_map(Result::ok).filter(|entry| entry.file_name().to_string_lossy().contains(".corrupt-")).collect();
+        assert_eq!(aside.len(), 1);
+
+        fs::write(&feed, br#"{"version":2,"events":[]}"#).unwrap();
+        seed_feed_if_missing(&runtime, &app_data).expect("a feed of the wrong shape is replaced too");
+        assert_eq!(fs::read(&feed).unwrap(), seed.to_vec());
+
+        let good = br#"{"version":1,"events":[{"key":"a"}]}"#;
+        fs::write(&feed, good).unwrap();
+        seed_feed_if_missing(&runtime, &app_data).unwrap();
+        assert_eq!(fs::read(&feed).unwrap(), good.to_vec(), "a valid feed is never touched");
+        let _ = fs::remove_dir_all(&root);
     }
 }
 

@@ -689,9 +689,9 @@ assert.match(html, /state === 'no_new_items'/);
 assert.match(html, /event\.summary_mode === 'extractive-v1'/);
 assert.match(html, /home-ai-summary-note/);
 const aiFixture = JSON.parse(await readFile(join(root, 'development', 'desktop', 'tests', 'fixtures', 'display-selection.json'), 'utf8'));
-const aiCardNames = ['aiFeedPriorityOrder', 'aiFeedText', 'aiFeedPriority', 'aiFeedDate', 'aiFeedWindowDays', 'aiFeedDayNumber', 'aiFeedEventDay',
-  'aiFeedNormalize', 'aiFeedSimilar', 'aiFeedDisplayEvents', 'aiFeedDayLabel', 'aiFeedSummaryText', 'aiFeedStatusText', 'aiFeedStatusTitle', 'aiFeedBusy', 'aiFeedFailureSummary'];
-const aiCard = evaluate(aiCardNames, {}, ['aiFeedDisplayEvents', 'aiFeedDayLabel', 'aiFeedSummaryText', 'aiFeedStatusText', 'aiFeedStatusTitle', 'aiFeedFailureSummary']);
+const aiCardNames = ['aiFeedPriorityOrder', 'aiFeedText', 'aiFeedPriority', 'aiFeedDate', 'aiFeedWindowDays', 'aiFeedDayNumber', 'aiFeedLocalDay', 'aiFeedEventDay',
+  'aiFeedNormalize', 'aiFeedRepeatsTitle', 'aiFeedDisplayEvents', 'aiFeedDayLabel', 'aiFeedEvidenceAfterTitle', 'aiFeedSummaryText', 'aiFeedStatusText', 'aiFeedStatusTitle', 'aiFeedBusy', 'aiFeedFailureSummary'];
+const aiCard = evaluate(aiCardNames, {}, ['aiFeedDisplayEvents', 'aiFeedDayLabel', 'aiFeedSummaryText', 'aiFeedRepeatsTitle', 'aiFeedDate', 'aiFeedStatusText', 'aiFeedStatusTitle', 'aiFeedFailureSummary']);
 for (const testCase of aiFixture.cases) {
   assert.deepEqual(
     Array.from(aiCard.api.aiFeedDisplayEvents(aiFixture.events, new Date(testCase.now), testCase.limit), (event) => event.key),
@@ -699,6 +699,24 @@ for (const testCase of aiFixture.cases) {
     `首页 AI 观察的选择规则必须与 Python 工作进程一致: ${testCase.now}`
   );
 }
+for (const testCase of aiFixture.zone_cases) {
+  assert.deepEqual(
+    Array.from(aiCard.api.aiFeedDisplayEvents(aiFixture.zone_events, new Date(testCase.now), testCase.limit, testCase.tz_offset_minutes), (event) => event.key),
+    testCase.expected,
+    `首页 AI 观察在固定时区下的日界与窗口边界必须与 Python 一致: ${testCase.name}`
+  );
+}
+for (const testCase of aiFixture.summary_cases) {
+  assert.equal(aiCard.api.aiFeedRepeatsTitle(testCase.summary, testCase.title), testCase.hidden, `摘要与标题重复的判定必须与 Python 一致: ${testCase.title} / ${testCase.summary}`);
+}
+assert.equal(aiCard.api.aiFeedSummaryText({ title: 'Introducing Acorn 3', evidence: 'Introducing Acorn 3\nIntroducing Acorn 3, our most capable model, now available in the API.', summary_mode: 'rule-v1', summary: 'Introducing Acorn 3, our most capable model, now available in the API.' }),
+  'Introducing Acorn 3, our most capable model, now available in the API.', '以标题开头但内容更多的摘要不应被隐藏');
+assert.equal(aiCard.api.aiFeedSummaryText({ title: 'Acorn 3 launches', evidence: 'Acorn 3 launches\nIt reads longer documents than any earlier model.' }),
+  'It reads longer documents than any earlier model.', '没有可信摘要时回退到去掉标题的证据');
+assert.equal(aiCard.api.aiFeedDate('2026-10-20T10:00:00').toISOString(), '2026-10-20T10:00:00.000Z', '无时区的时间戳按 UTC 解读，与 Python 工作进程一致');
+assert.equal(aiCard.api.aiFeedDate('2026-10-20 10:00').toISOString(), '2026-10-20T10:00:00.000Z');
+assert.equal(aiCard.api.aiFeedDate('2026-10-20T10:00:00+08:00').toISOString(), '2026-10-20T02:00:00.000Z');
+assert.equal(aiCard.api.aiFeedDate('not a date'), null);
 assert.doesNotMatch(html, /aiFeedIsToday|aiFeedTodayEvents/, '首页 AI 观察不应只显示发现于当天的条目');
 const aiNow = new Date(2026, 9, 26, 12, 0, 0);
 const dayLabel = (published, extra = {}) => aiCard.api.aiFeedDayLabel({ published_at: published, ...extra }, aiNow);
@@ -719,6 +737,8 @@ const recent = new Date(Date.now() - 3600 * 1000).toISOString();
 assert.equal(aiCard.api.aiFeedStatusText({ state: 'partial', failed_sources: 12, pending_sources: 0, new_items: 0, last_success_at: recent }), '已检查 · 12 个来源未响应');
 assert.equal(aiCard.api.aiFeedStatusText({ state: 'partial', failed_sources: 2, pending_sources: 1, new_items: 3, last_success_at: recent }), '更新 +3 · 3 个来源未响应');
 assert.equal(aiCard.api.aiFeedStatusText({ state: 'partial', failed_sources: 2, new_items: 0, last_success_at: new Date(Date.now() - 3 * 86400000).toISOString() }), '部分失败 · 过期');
+assert.equal(aiCard.api.aiFeedStatusText({ state: 'no_new_items', last_success_at: new Date(Date.now() - 25 * 3600000).toISOString() }), '今日暂无新增', '每日一次的更新在到点前不应提前显示“数据过期”');
+assert.equal(aiCard.api.aiFeedStatusText({ state: 'no_new_items', last_success_at: new Date(Date.now() - 37 * 3600000).toISOString() }), '数据过期');
 assert.equal(aiCard.api.aiFeedStatusText({ state: 'no_new_items', last_success_at: recent }), '今日暂无新增');
 const aiTooltip = aiCard.api.aiFeedStatusTitle({ state: 'partial', failed_sources: 12, failure_kinds: { '被拦截': 4, '超时': 8, '其他': 0 }, model_state: 'unavailable', message: '已更新 2 条情报' });
 assert.match(aiTooltip, /失败来源：12（被拦截 4、超时 8）/);
@@ -728,6 +748,9 @@ assert.match(aiCard.api.aiFeedFailureSummary(failureStatus), /^12 个来源未�
 assert.equal(aiCard.api.aiFeedFailureSummary({ ...failureStatus, state: 'updating' }), '12 个来源未响应：超时 8、被拦截 4');
 assert.equal(aiCard.api.aiFeedFailureSummary({ state: 'updated', failed_sources: 0 }), '');
 assert.match(html, /id="home-ai-refresh"/);
+assert.match(html, /home-ai-refresh\[aria-disabled="true"\]/, '刷新按钮忙碌时用 aria-disabled，避免键盘焦点被 disabled 夺走');
+assert.doesNotMatch(html, /homeAiRefresh\.disabled/, '刷新按钮不应使用 disabled 属性');
+assert.match(html, /next\.innerHTML === homeAiEvents\.innerHTML/, '内容未变化时不应重建 AI 卡片，否则轮询会丢失键盘焦点并重复朗读');
 assert.ok(html.includes("invoke('refresh_ai_news')"), '首页 AI 观察的手动刷新必须调用 Rust 命令，而不是由前端自行采集');
 assert.match(await readFile(join(root, 'development', 'desktop', 'src-tauri', 'src', 'lib.rs'), 'utf8'), /refresh_ai_news,/);
 const aiWatchRust = await readFile(join(root, 'development', 'desktop', 'src-tauri', 'src', 'ai_watch.rs'), 'utf8');
@@ -737,7 +760,8 @@ assert.match(aiWatchRust, /JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE/);
 const aiWatchWorker = await readFile(join(root, 'development', 'desktop', 'ai_radar', 'watch.py'), 'utf8');
 assert.match(aiWatchWorker, /suspicious_instruction/);
 assert.match(aiWatchWorker, /summary_mode/);
-assert.match(aiWatchWorker, /os\.replace/);
+assert.match(aiWatchWorker, /replace_with_retry/, '情报文件必须经带重试的原子替换发布');
+assert.match(await readFile(join(root, 'development', 'desktop', 'ai_radar', 'core.py'), 'utf8'), /os\.replace/);
 for (const file of ['development/desktop/package.json', 'development/desktop/package-lock.json',
   'development/desktop/src-tauri/tauri.conf.json', 'development/desktop/src-tauri/Cargo.toml',
   'development/desktop/src-tauri/Cargo.lock']) {

@@ -1,3 +1,4 @@
+import time
 import unittest
 
 from ai_radar.core import _decode, _page_problem, visible_text
@@ -59,6 +60,30 @@ class HtmlExtractionTests(unittest.TestCase):
         self.assertIn("模型发布说明", visible_text(payload, "text/html; charset=gbk"))
         self.assertEqual(_decode("héllo".encode("utf-8")), "héllo")
 
+    def test_button_text_is_kept_so_copyable_model_ids_are_not_lost(self):
+        page = "<main><h2>Oct 22, 2026</h2><table><tr><td><button>claude-acorn-3-20261022</button></td><td>Active</td></tr></table></main>"
+        self.assertIn("claude-acorn-3-20261022 | Active", visible_text(page.encode(), "text/html").splitlines())
+
+    def test_a_row_with_tens_of_thousands_of_cells_is_read_in_linear_time(self):
+        started = time.monotonic()
+        text = visible_text(("<table><tr>" + "<td>x</td>" * 40000 + "</tr></table>").encode(), "text/html")
+        self.assertLess(time.monotonic() - started, 4.0)  # the quadratic version needed ~9 s
+        self.assertTrue(str(text).startswith("x | x | x"))
+
+    def test_empty_table_cells_do_not_repeat_the_separator(self):
+        raw = b"<table><tr><td>a</td><td></td><td></td><td>b</td></tr></table>"
+        self.assertEqual(visible_text(raw, "text/html").splitlines(), ["a | b"])
+
+    def test_unclosed_navigation_on_a_small_page_does_not_hide_the_text(self):
+        page = "<p>Intro paragraph with words.</p><nav><a href='/'>Menu</a><main><p>Real changelog content for readers.</p></main>"
+        self.assertIn("Real changelog content for readers.", visible_text(page.encode(), "text/html").splitlines())
+
+    def test_item_containers_are_recorded_for_listings(self):
+        page = "<ul><li><h3>Alpha item</h3><time datetime='2026-10-20'></time><p>First summary text.</p></li><li>Beta</li></ul>"
+        text = visible_text(page.encode(), "text/html")
+        self.assertEqual(text.splitlines(), ["Alpha item", "2026-10-20", "First summary text.", "Beta"])
+        self.assertEqual(text.entries, [(0, 3)])  # a one-line item is not an item range
+
     def test_formatting_changes_do_not_change_the_text(self):
         before = b"<html><head><style>.x{color:red}</style></head><body><h1>2026-10-16</h1><p>New API endpoint</p></body></html>"
         after = b"<html><head><style>.x{color:blue}</style><script>ad()</script></head><body><div><h1>2026-10-16</h1><p>New   API  <b>endpoint</b></p></div></body></html>"
@@ -91,6 +116,28 @@ class FeedExtractionTests(unittest.TestCase):
         text = visible_text(self.RSS.encode("utf-8"), "application/rss+xml", "https://example.com/feed")
         self.assertEqual(text.splitlines(), ["2026-10-20", "Acorn 3 is here. Our newest model."])
 
+    def test_a_byte_order_mark_or_blank_lines_before_the_xml_declaration_are_tolerated(self):
+        for prefix in ("\ufeff", "\n\n", "\ufeff\n"):
+            with self.subTest(prefix=repr(prefix)):
+                text = visible_text((prefix + self.RSS).encode("utf-8"), "")
+                self.assertEqual(text.splitlines(), ["2026-10-20", "Acorn 3 is here. Our newest model."])
+                self.assertEqual(text.kind, "feed")
+
+    def test_an_impossible_feed_date_is_ignored_not_fatal(self):
+        rss = self.RSS.replace("Tue, 20 Oct 2026 09:30:00 GMT", "Fri, 31 Dec 9999 23:59:59 -0100")
+        self.assertEqual(visible_text(rss.encode(), "application/rss+xml").splitlines(), ["Acorn 3 is here. Our newest model."])
+
+    def test_an_entry_title_that_only_repeats_the_date_is_dropped(self):
+        rss = self.RSS.replace("<title>Acorn 3 is here</title>", "<title>Acorn news - October 20, 2026</title>")
+        self.assertEqual(visible_text(rss.encode(), "application/rss+xml").splitlines(), ["2026-10-20", "Our newest model."])
+
+    def test_a_lone_surrogate_in_json_is_removed(self):
+        raw = (b'{"status":{"description":"x"},"incidents":[{"name":"Outage \\ud800 in API","status":"investigating",'
+               b'"created_at":"2026-10-26T08:00:00Z","incident_updates":[]}]}')
+        text = str(visible_text(raw, "application/json"))
+        text.encode("utf-8")  # a stored snapshot must be encodable
+        self.assertIn("Incident: Outage in API (investigating).", text)
+
     def test_status_json_lists_incidents_and_stays_quiet_when_healthy(self):
         incident = (
             '{"status":{"description":"Partial System Outage"},"components":[{"name":"API","status":"degraded_performance"}],'
@@ -111,6 +158,18 @@ class PageProblemTests(unittest.TestCase):
         self.assertIn("blocked", _page_problem("You need to enable JavaScript to run this app."))
         self.assertIn("empty", _page_problem("Loading"))
         self.assertIn("empty", _page_problem(""))
+
+    def test_status_json_and_feeds_are_never_mistaken_for_a_verification_page(self):
+        incident = (
+            '{"status":{"description":"x"},"incidents":[{"name":"Access denied errors for some API keys","status":"investigating",'
+            '"created_at":"2026-10-26T08:00:00Z","incident_updates":[]}]}'
+        )
+        self.assertEqual(_page_problem(visible_text(incident.encode(), "application/json")), "")
+        atom = (
+            '<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>v1.2.3</title><updated>2026-10-20T00:00:00Z</updated>'
+            '<content type="html">Fixed a captcha bug</content></entry></feed>'
+        )
+        self.assertEqual(_page_problem(visible_text(atom.encode(), "application/atom+xml")), "")
 
     def test_ordinary_pages_pass_even_when_they_mention_javascript(self):
         article = "Release notes for the JavaScript SDK. " + "The SDK now supports streaming responses. " * 80
