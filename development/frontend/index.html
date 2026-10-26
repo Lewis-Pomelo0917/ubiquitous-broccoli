@@ -1982,6 +1982,29 @@
 
     .home-ai-title { margin: 0; color: var(--text); font-size: 17px; font-weight: 600; letter-spacing: 0; }
     .home-ai-day { color: var(--muted); font-size: 12px; }
+    .home-ai-head-tools { display: flex; min-width: 0; align-items: center; gap: 6px; }
+    .home-ai-refresh {
+      display: inline-grid;
+      flex: 0 0 auto;
+      width: 28px;
+      height: 28px;
+      margin: -4px -6px -4px 0;
+      padding: 0;
+      place-items: center;
+      border: 1px solid transparent;
+      border-radius: var(--radius-button-compact);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: background .15s ease, border-color .15s ease, color .15s ease;
+    }
+    .home-ai-refresh[hidden] { display: none; }
+    .home-ai-refresh:hover:not(:disabled) { border-color: var(--line); background: var(--surface-soft); color: var(--text); }
+    .home-ai-refresh:focus-visible { outline: 0; box-shadow: var(--focus-ring); }
+    .home-ai-refresh:disabled { cursor: default; opacity: .6; }
+    .home-ai-refresh.is-busy svg { animation: home-ai-spin 1s linear infinite; }
+    @keyframes home-ai-spin { to { transform: rotate(360deg); } }
+    .home-ai-empty-detail { padding: 2px 8px 6px; color: var(--muted); font-size: 11px; line-height: 1.5; text-align: center; }
     .home-ai-events { min-width: 0; }
     .home-ai-item { min-width: 0; padding: 14px 0; }
     .home-ai-item + .home-ai-item { border-top: 1px solid var(--line); }
@@ -2817,7 +2840,10 @@
           <aside class="home-ai-card" aria-labelledby="home-ai-title">
             <div class="home-ai-head">
               <h3 class="home-ai-title" id="home-ai-title">AI 观察</h3>
-              <span class="home-ai-day" id="home-ai-status" title="情报状态">准备中</span>
+              <div class="home-ai-head-tools">
+                <span class="home-ai-day" id="home-ai-status" title="情报状态">准备中</span>
+                <button class="home-ai-refresh" type="button" id="home-ai-refresh" aria-label="立即检查更新" title="立即检查更新" hidden><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
+              </div>
             </div>
             <div class="home-ai-events" id="home-ai-events" aria-live="polite">
               <div class="home-ai-empty">正在读取…</div>
@@ -6424,6 +6450,8 @@
 
       const homeAiEvents = document.getElementById('home-ai-events');
       const homeAiStatus = document.getElementById('home-ai-status');
+      const homeAiRefresh = document.getElementById('home-ai-refresh');
+      const aiFeedCanRefresh = () => Boolean(window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function');
       const aiFeedState = { feed: null, status: null, loading: true, error: false };
       const aiFeedPriorityOrder = { P0: 0, P1: 1, P2: 2, P3: 3 };
 
@@ -6434,24 +6462,96 @@
         const date = new Date(value);
         return Number.isNaN(date.getTime()) ? null : date;
       };
-      const aiFeedIsToday = (date, now = new Date()) => date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
-      const aiFeedTime = (date) => String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
+      const aiFeedWindowDays = { P0: 7, P1: 7, P2: 3, P3: 3 };
+      const aiFeedTypeLabels = {
+        release: '发布', api: 'API', pricing: '价格', deprecation: '弃用', reset: '额度', security: '安全与状态',
+        open_weights: '开放权重', cloud_availability: '云平台', benchmark: '评测', industry: '产业',
+        policy: '政策', compute: '算力', tool: '工具', research: '研究', content_change: '更新'
+      };
+      const aiFeedDayNumber = (year, monthIndex, day) => Math.floor(Date.UTC(year, monthIndex, day) / 86400000);
+      const aiFeedEventDay = (event) => {
+        const published = aiFeedDate(event.published_at);
+        if (published) return aiFeedDayNumber(published.getUTCFullYear(), published.getUTCMonth(), published.getUTCDate());
+        const discovered = aiFeedDate(event.discovered_at);
+        return discovered ? aiFeedDayNumber(discovered.getFullYear(), discovered.getMonth(), discovered.getDate()) : null;
+      };
+      const aiFeedNormalize = (value) => aiFeedText(value).toLowerCase().replace(/[^\p{L}\p{N}_]+/gu, ' ').trim();
+      const aiFeedSimilar = (left, right) => {
+        const first = aiFeedNormalize(left);
+        const second = aiFeedNormalize(right);
+        return Boolean(first) && Boolean(second) && (first.includes(second) || second.includes(first));
+      };
+      const aiFeedDisplayEvents = (events, now = new Date(), limit = 3) => {
+        const today = aiFeedDayNumber(now.getFullYear(), now.getMonth(), now.getDate());
+        const ranked = events
+          .filter((event) => event && typeof event === 'object')
+          .map((event) => {
+            const day = aiFeedEventDay(event);
+            const discovered = aiFeedDate(event.discovered_at);
+            return {
+              event,
+              rank: aiFeedPriorityOrder[aiFeedPriority(event.priority)],
+              age: day === null ? Infinity : Math.max(0, today - day),
+              confidence: Number(event.confidence) || 0,
+              discovered: discovered ? discovered.getTime() : 0
+            };
+          })
+          .filter((item) => item.age <= aiFeedWindowDays[aiFeedPriority(item.event.priority)])
+          .sort((left, right) => left.rank - right.rank
+            || left.age - right.age
+            || right.confidence - left.confidence
+            || right.discovered - left.discovered
+            || (aiFeedText(left.event.key) < aiFeedText(right.event.key) ? -1 : aiFeedText(left.event.key) > aiFeedText(right.event.key) ? 1 : 0));
+        const seen = new Set();
+        const chosen = [];
+        for (const item of ranked) {
+          const key = aiFeedNormalize(item.event.title) || aiFeedText(item.event.key);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          chosen.push(item.event);
+          if (chosen.length >= limit) break;
+        }
+        return chosen;
+      };
+      const aiFeedDayLabel = (event, now = new Date()) => {
+        const day = aiFeedEventDay(event);
+        if (day === null) return '';
+        const diff = aiFeedDayNumber(now.getFullYear(), now.getMonth(), now.getDate()) - day;
+        if (diff === 0) return '今天';
+        if (diff === 1) return '昨天';
+        if (diff > 1 && diff < 7) return diff + ' 天前';
+        const date = new Date(day * 86400000);
+        return (date.getUTCMonth() + 1) + '月' + date.getUTCDate() + '日' + (diff < 0 ? '生效' : '');
+      };
+      const aiFeedSummaryText = (event) => {
+        const evidence = aiFeedText(event.evidence);
+        const summary = aiFeedText(event.summary);
+        const trusted = (event.summary_mode === 'extractive-v1' || event.summary_mode === 'rule-v1') && summary && evidence.includes(summary);
+        const text = trusted ? summary : evidence.slice(0, 180);
+        return aiFeedSimilar(text, event.title) ? '' : text;
+      };
       const aiFeedStatusText = (status) => {
-        if (!status || typeof status !== 'object') return '今日';
+        if (!status || typeof status !== 'object') return '近期';
+        const state = aiFeedText(status.state);
         const labels = {
           preparing: '准备本地组件', updating: '更新中', updated: '已更新',
           no_new_items: '今日暂无新增', partial: '部分未完成', failed: '更新失败',
           interrupted: '恢复上次更新', unsupported: '更新不可用'
         };
-        const label = labels[aiFeedText(status.state)] || '今日';
+        const label = labels[state] || '近期';
         const lastSuccess = aiFeedDate(status.last_success_at);
         const stale = lastSuccess && Date.now() - lastSuccess.getTime() > 86400000;
-        if (stale && aiFeedText(status.state) === 'updating') return '更新中 · 旧数据';
-        if (stale && aiFeedText(status.state) === 'failed') return '失败 · 过期';
-        if (stale && aiFeedText(status.state) === 'partial') return '部分失败 · 过期';
-        if (stale && aiFeedText(status.state) === 'interrupted') return '中断 · 过期';
+        if (stale && state === 'updating') return '更新中 · 旧数据';
+        if (stale && state === 'failed') return '失败 · 过期';
+        if (stale && state === 'partial') return '部分失败 · 过期';
+        if (stale && state === 'interrupted') return '中断 · 过期';
         if (stale) return '数据过期';
-        if (status.state === 'updated' && Number(status.new_items) > 0) return '更新 +' + Number(status.new_items);
+        if (state === 'partial') {
+          const missing = Number(status.failed_sources || 0) + Number(status.pending_sources || 0);
+          const head = Number(status.new_items) > 0 ? '更新 +' + Number(status.new_items) : '已检查';
+          return missing > 0 ? head + ' · ' + missing + ' 个来源未响应' : label;
+        }
+        if (state === 'updated' && Number(status.new_items) > 0) return '更新 +' + Number(status.new_items);
         return label;
       };
       const aiFeedStatusTitle = (status) => {
@@ -6460,20 +6560,25 @@
         const details = [];
         if (aiFeedText(status.message)) details.push(aiFeedText(status.message));
         if (lastSuccess) details.push('最近成功检查：' + lastSuccess.toLocaleString());
-        if (Number(status.failed_sources) > 0) details.push('失败来源：' + Number(status.failed_sources));
+        if (Number(status.failed_sources) > 0) {
+          const kinds = status.failure_kinds && typeof status.failure_kinds === 'object'
+            ? Object.entries(status.failure_kinds).filter(([, count]) => Number(count) > 0).map(([kind, count]) => aiFeedText(kind) + ' ' + Number(count)).join('、')
+            : '';
+          details.push('失败来源：' + Number(status.failed_sources) + (kinds ? '（' + kinds + '）' : ''));
+        }
         if (Number(status.pending_sources) > 0) details.push('待检查来源：' + Number(status.pending_sources));
+        if (status.model_state === 'unavailable') details.push('本地模型暂不可用，摘要使用规则摘录' + (aiFeedText(status.model_error) ? '（' + aiFeedText(status.model_error) + '）' : ''));
         return details.join('；') || '情报状态';
       };
-      const aiFeedTodayEvents = () => {
-        const now = new Date();
-        const events = aiFeedState.feed && Array.isArray(aiFeedState.feed.events) ? aiFeedState.feed.events : [];
-        return events
-          .filter((event) => event && typeof event === 'object')
-          .map((event) => ({ event, date: aiFeedDate(event.discovered_at) }))
-          .filter((item) => item.date && aiFeedIsToday(item.date, now))
-          .sort((left, right) => right.date.getTime() - left.date.getTime() || aiFeedPriorityOrder[aiFeedPriority(left.event.priority)] - aiFeedPriorityOrder[aiFeedPriority(right.event.priority)])
-          .slice(0, 3);
+      const aiFeedFailureSummary = (status) => {
+        if (!status || typeof status !== 'object' || !(Number(status.failed_sources) > 0)) return '';
+        const kinds = status.failure_kinds && typeof status.failure_kinds === 'object'
+          ? Object.entries(status.failure_kinds).filter(([, count]) => Number(count) > 0).map(([kind, count]) => aiFeedText(kind) + ' ' + Number(count)).join('、')
+          : '';
+        return Number(status.failed_sources) + ' 个来源未响应' + (kinds ? '：' + kinds : '') + (aiFeedBusy(status) ? '' : '。可点右上角刷新重试，或检查网络与代理。');
       };
+      const aiFeedBusy = (status) => ['preparing', 'updating'].includes(aiFeedText(status && status.state));
+      const aiFeedVisibleEvents = () => aiFeedDisplayEvents(aiFeedState.feed && Array.isArray(aiFeedState.feed.events) ? aiFeedState.feed.events : []);
       const safeAiUrl = (value) => {
         try {
           const raw = aiFeedText(value).trim();
@@ -6490,6 +6595,13 @@
           homeAiStatus.textContent = aiFeedStatusText(aiFeedState.status);
           homeAiStatus.title = aiFeedStatusTitle(aiFeedState.status);
         }
+        if (homeAiRefresh) {
+          const busy = aiFeedBusy(aiFeedState.status);
+          homeAiRefresh.hidden = !aiFeedCanRefresh() || aiFeedText(aiFeedState.status && aiFeedState.status.state) === 'unsupported';
+          homeAiRefresh.disabled = busy;
+          homeAiRefresh.classList.toggle('is-busy', busy);
+          homeAiRefresh.setAttribute('aria-busy', busy ? 'true' : 'false');
+        }
         if (aiFeedState.loading && !aiFeedState.feed) {
           homeAiEvents.innerHTML = '<div class="home-ai-empty">正在读取…</div>';
           return;
@@ -6501,7 +6613,7 @@
           homeAiEvents.appendChild(empty);
           return;
         }
-        const events = aiFeedTodayEvents();
+        const events = aiFeedVisibleEvents();
         if (!events.length) {
           const empty = document.createElement('div');
           const state = aiFeedText(aiFeedState.status && aiFeedState.status.state);
@@ -6509,17 +6621,25 @@
           empty.textContent = state === 'failed'
             ? '更新失败，已保留最近成功数据'
             : state === 'partial'
-              ? '部分来源未能检查；保留已有情报'
+              ? '近期暂无重要情报；部分来源未能检查'
               : state === 'updating' || state === 'preparing'
                 ? '正在准备或更新本地情报'
                 : state === 'no_new_items'
-                  ? '今天检查完成，暂无新增情报'
-                  : '今天暂无可展示的情报';
+                  ? '检查完成，近期暂无重要情报'
+                  : '近期暂无可展示的情报';
           homeAiEvents.appendChild(empty);
+          const detail = aiFeedFailureSummary(aiFeedState.status);
+          if (detail) {
+            const hint = document.createElement('div');
+            hint.className = 'home-ai-empty-detail';
+            hint.textContent = detail;
+            homeAiEvents.appendChild(hint);
+          }
           return;
         }
+        const now = new Date();
         const fragment = document.createDocumentFragment();
-        events.forEach(({ event, date }) => {
+        events.forEach((event) => {
           const article = document.createElement('article');
           article.className = 'home-ai-item';
           const head = document.createElement('div');
@@ -6548,19 +6668,16 @@
           meta.className = 'home-ai-item-meta';
           const source = document.createElement('span');
           source.className = 'home-ai-source';
-          source.textContent = aiFeedText(event.provider || event.source_name || event.source_id) || '未知来源';
+          const typeLabel = aiFeedTypeLabels[aiFeedText(event.event_type)] || '';
+          source.textContent = (aiFeedText(event.provider || event.source_name || event.source_id) || '未知来源') + (typeLabel ? ' · ' + typeLabel : '');
           const time = document.createElement('time');
           time.className = 'home-ai-time';
-          time.dateTime = event.discovered_at;
-          time.textContent = aiFeedTime(date);
+          const published = aiFeedDate(event.published_at);
+          time.dateTime = published ? published.toISOString().slice(0, 10) : aiFeedText(event.discovered_at);
+          time.textContent = aiFeedDayLabel(event, now);
           meta.append(source, time);
           article.appendChild(meta);
-          const evidence = aiFeedText(event.evidence);
-          const summary = event.summary_mode === 'extractive-v1'
-            && typeof event.summary === 'string'
-            && evidence.includes(event.summary)
-            ? event.summary
-            : evidence.slice(0, 180);
+          const summary = aiFeedSummaryText(event);
           if (summary) {
             const excerpt = document.createElement('p');
             excerpt.className = 'home-ai-summary';
@@ -6576,6 +6693,12 @@
           fragment.appendChild(article);
         });
         homeAiEvents.appendChild(fragment);
+      };
+      let aiFeedFastTimer = 0;
+      const aiFeedFollowUp = () => {
+        if (aiFeedBusy(aiFeedState.status) && !aiFeedFastTimer) {
+          aiFeedFastTimer = window.setTimeout(() => { aiFeedFastTimer = 0; loadAiFeed(); }, 5000);
+        }
       };
       const loadAiFeed = async () => {
         aiFeedState.loading = true;
@@ -6602,6 +6725,7 @@
           aiFeedState.loading = false;
           aiFeedState.error = false;
           renderHomeAi();
+          aiFeedFollowUp();
         } catch (error) {
           const preparing = ['preparing', 'updating'].includes(aiFeedText(aiFeedState.status && aiFeedState.status.state));
           const missingInitialFeed = aiFeedText(error && (error.message || error)).includes('本机 AI 情报不可用');
@@ -6609,8 +6733,22 @@
           aiFeedState.loading = false;
           aiFeedState.error = !aiFeedState.feed;
           renderHomeAi();
+          aiFeedFollowUp();
         }
       };
+      if (homeAiRefresh) {
+        homeAiRefresh.addEventListener('click', async () => {
+          if (!aiFeedCanRefresh() || homeAiRefresh.disabled) return;
+          homeAiRefresh.disabled = true;
+          homeAiRefresh.classList.add('is-busy');
+          try {
+            await window.__TAURI__.core.invoke('refresh_ai_news');
+          } catch (error) {
+            // The status line reports problems; a failed request only makes the button usable again.
+          }
+          window.setTimeout(loadAiFeed, 1500);
+        });
+      }
       loadAiFeed();
       window.setInterval(loadAiFeed, 60000);
 

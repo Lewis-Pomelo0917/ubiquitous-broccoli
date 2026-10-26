@@ -7,9 +7,9 @@
 - Tauri 配置和前端元数据标记版本 `0.1.5-dev-0921`。
 - 当前包含八个模块：主页与本地 AI 观察、体积/CBM、本册进阶、金额英文、计算器、潘通查询、世界时钟和本地备忘录。
 - 主页通过 Tauri `read_ai_feed` 从 per-user `app_local_data_dir` 读取 version-1 feed，并用 `read_ai_status` 显示更新状态；Git 不包含用户新闻快照。
-- AI Watch 由 `development/desktop/ai_radar/watch.py` 管理，复用 91 条公开来源、规则筛选和本机 SQLite 状态。Qwen3-0.6B Q4_0 只选择证据中的连续原文片段，不生成日期、价格、类别、优先级或事件；疑似提示注入不送入模型，输出不通过摘录校验时保留最后好 feed。
+- AI Watch 由 `development/desktop/ai_radar/watch.py` 管理，复用 91 条公开来源、规则筛选和本机 SQLite 状态。Qwen3-0.6B Q4_0 只选择证据中的连续原文片段，不生成日期、价格、类别、优先级或事件；标题、类型、日期、优先级和链接由规则生成；疑似提示注入不送入模型，输出不通过摘录校验时丢弃该条模型结果并改用规则摘录（同样是证据原文），新闻照常发布；仅在所有来源都检查失败时保留最后好 feed。首页最多显示三条，按重要性（近 7 天 P0/P1、近 3 天 P2/P3）选取。
 - Windows x64 完整候选是带本地资源载荷的单个 `Cubic.exe`。首次运行把模型、嵌入式 Python、llama.cpp CPU runner 和采集源释放到 per-user application data；用户端不下载模型或安装模型软件。采集仍需网络，推理可离线；WebView2 仍是 Windows 平台前提。
-- 每日调度仅在 Cubic 运行（包括托盘）期间存在；退出时 Job Object 结束采集/推理子进程树，无服务或自启动。应用标识 `com.tradedesk.app` 与本机存储键保持不变，移动或改名 EXE 不影响同一 Windows 用户的模型缓存/情报位置。
+- 调度（约每天清晨一次，出错时按退避重试，首页刷新按钮可立即检查）仅在 Cubic 运行（包括托盘）期间存在；退出时 Job Object 结束采集/推理子进程树，无服务或自启动。应用标识 `com.tradedesk.app` 与本机存储键保持不变，移动或改名 EXE 不影响同一 Windows 用户的模型缓存/情报位置。
 - `development/frontend/index.html` 集中主要界面、样式和业务交互；`development/desktop/` 是唯一 Tauri 工程；`development/tools/` 提供源码检查。AI 契约、模型/推理器 hash、许可证、构建与 Claude 前端交接见 [`development/desktop/AI-WATCH.md`](development/desktop/AI-WATCH.md)。
 
 ## 业务边界

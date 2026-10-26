@@ -56,8 +56,11 @@ def main() -> int:
 
     started = time.perf_counter()
     with tempfile.TemporaryDirectory(prefix="cubic-ai-model-check-", dir=args.runner.parent) as directory:
+        # The synthetic samples carry fixed dates, so select them explicitly instead of
+        # through the home-card window, and fail hard: this check proves the model works.
         summaries, skipped = summarize_events(
-            items, args.runner, args.model, args.schema, Path(directory)
+            items, args.runner, args.model, args.schema, Path(directory),
+            select=lambda events, _now: events, strict=True, min_options=1,
         )
     if summaries != 3 or skipped != 0:
         raise SystemExit(f"unexpected extractive summary counts: {summaries=}, {skipped=}")

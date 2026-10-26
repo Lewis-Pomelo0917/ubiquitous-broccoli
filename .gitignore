@@ -5,6 +5,10 @@
 **/target/
 **/gen/
 
+# Python bytecode from the AI Watch worker tests
+**/__pycache__/
+*.pyc
+
 # Local distribution, originals, task staging and history
 /outputs/
 /development/originals/

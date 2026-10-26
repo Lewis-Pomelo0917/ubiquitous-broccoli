@@ -688,6 +688,48 @@ assert.ok(html.includes("invoke('read_ai_status')"), 'AI observation must read t
 assert.match(html, /state === 'no_new_items'/);
 assert.match(html, /event\.summary_mode === 'extractive-v1'/);
 assert.match(html, /home-ai-summary-note/);
+const aiFixture = JSON.parse(await readFile(join(root, 'development', 'desktop', 'tests', 'fixtures', 'display-selection.json'), 'utf8'));
+const aiCardNames = ['aiFeedPriorityOrder', 'aiFeedText', 'aiFeedPriority', 'aiFeedDate', 'aiFeedWindowDays', 'aiFeedDayNumber', 'aiFeedEventDay',
+  'aiFeedNormalize', 'aiFeedSimilar', 'aiFeedDisplayEvents', 'aiFeedDayLabel', 'aiFeedSummaryText', 'aiFeedStatusText', 'aiFeedStatusTitle', 'aiFeedBusy', 'aiFeedFailureSummary'];
+const aiCard = evaluate(aiCardNames, {}, ['aiFeedDisplayEvents', 'aiFeedDayLabel', 'aiFeedSummaryText', 'aiFeedStatusText', 'aiFeedStatusTitle', 'aiFeedFailureSummary']);
+for (const testCase of aiFixture.cases) {
+  assert.deepEqual(
+    Array.from(aiCard.api.aiFeedDisplayEvents(aiFixture.events, new Date(testCase.now), testCase.limit), (event) => event.key),
+    testCase.expected,
+    `首页 AI 观察的选择规则必须与 Python 工作进程一致: ${testCase.now}`
+  );
+}
+assert.doesNotMatch(html, /aiFeedIsToday|aiFeedTodayEvents/, '首页 AI 观察不应只显示发现于当天的条目');
+const aiNow = new Date(2026, 9, 26, 12, 0, 0);
+const dayLabel = (published, extra = {}) => aiCard.api.aiFeedDayLabel({ published_at: published, ...extra }, aiNow);
+assert.equal(dayLabel('2026-10-26T00:00:00+00:00'), '今天');
+assert.equal(dayLabel('2026-10-25T00:00:00+00:00'), '昨天');
+assert.equal(dayLabel('2026-10-23T00:00:00+00:00'), '3 天前');
+assert.equal(dayLabel('2026-10-10T00:00:00+00:00'), '10月10日');
+assert.equal(dayLabel('2026-11-15T00:00:00+00:00'), '11月15日生效');
+assert.equal(dayLabel('', { discovered_at: new Date(2026, 9, 26, 8).toISOString() }), '今天');
+assert.equal(dayLabel(''), '');
+const aiEvidence = '先发布了新模型。\nThe endpoint now accepts batches of requests.';
+const aiSummary = (extra) => aiCard.api.aiFeedSummaryText({ title: 'Acorn 3 launches', evidence: aiEvidence, ...extra });
+assert.equal(aiSummary({ summary: 'The endpoint now accepts batches of requests.', summary_mode: 'rule-v1' }), 'The endpoint now accepts batches of requests.');
+assert.equal(aiSummary({ summary: 'The endpoint now accepts batches of requests.', summary_mode: 'extractive-v1' }), 'The endpoint now accepts batches of requests.');
+assert.equal(aiSummary({ summary: 'Invented sentence that is not in the evidence.', summary_mode: 'extractive-v1' }), aiEvidence.slice(0, 180), '未通过原文校验的摘要必须回退到证据原文');
+assert.equal(aiCard.api.aiFeedSummaryText({ title: 'Acorn 3 launches!', evidence: 'Acorn 3 launches', summary_mode: 'rule-v1', summary: '' }), '', '与标题重复的摘要不应再显示一遍');
+const recent = new Date(Date.now() - 3600 * 1000).toISOString();
+assert.equal(aiCard.api.aiFeedStatusText({ state: 'partial', failed_sources: 12, pending_sources: 0, new_items: 0, last_success_at: recent }), '已检查 · 12 个来源未响应');
+assert.equal(aiCard.api.aiFeedStatusText({ state: 'partial', failed_sources: 2, pending_sources: 1, new_items: 3, last_success_at: recent }), '更新 +3 · 3 个来源未响应');
+assert.equal(aiCard.api.aiFeedStatusText({ state: 'partial', failed_sources: 2, new_items: 0, last_success_at: new Date(Date.now() - 3 * 86400000).toISOString() }), '部分失败 · 过期');
+assert.equal(aiCard.api.aiFeedStatusText({ state: 'no_new_items', last_success_at: recent }), '今日暂无新增');
+const aiTooltip = aiCard.api.aiFeedStatusTitle({ state: 'partial', failed_sources: 12, failure_kinds: { '被拦截': 4, '超时': 8, '其他': 0 }, model_state: 'unavailable', message: '已更新 2 条情报' });
+assert.match(aiTooltip, /失败来源：12（被拦截 4、超时 8）/);
+assert.match(aiTooltip, /本地模型暂不可用/);
+const failureStatus = { state: 'partial', failed_sources: 12, failure_kinds: { '超时': 8, '被拦截': 4 } };
+assert.match(aiCard.api.aiFeedFailureSummary(failureStatus), /^12 个来源未响应：超时 8、被拦截 4。可点右上角刷新重试/);
+assert.equal(aiCard.api.aiFeedFailureSummary({ ...failureStatus, state: 'updating' }), '12 个来源未响应：超时 8、被拦截 4');
+assert.equal(aiCard.api.aiFeedFailureSummary({ state: 'updated', failed_sources: 0 }), '');
+assert.match(html, /id="home-ai-refresh"/);
+assert.ok(html.includes("invoke('refresh_ai_news')"), '首页 AI 观察的手动刷新必须调用 Rust 命令，而不是由前端自行采集');
+assert.match(await readFile(join(root, 'development', 'desktop', 'src-tauri', 'src', 'lib.rs'), 'utf8'), /refresh_ai_news,/);
 const aiWatchRust = await readFile(join(root, 'development', 'desktop', 'src-tauri', 'src', 'ai_watch.rs'), 'utf8');
 assert.match(aiWatchRust, /app_local_data_dir\(\)/);
 assert.match(aiWatchRust, /CUBICAI1/);

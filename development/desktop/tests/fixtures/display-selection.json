@@ -1,0 +1,162 @@
+{
+  "description": "Home-card selection shared by the Python worker and the frontend; keep both in step.",
+  "events": [
+    {
+      "key": "k1",
+      "priority": "P1",
+      "published_at": "2026-10-26T00:00:00+00:00",
+      "title": "Acorn 3 launches",
+      "confidence": 0.9,
+      "discovered_at": "2026-10-26T10:00:00+00:00",
+      "event_type": "release",
+      "evidence": "Acorn 3 launches",
+      "source_id": "s",
+      "url": "https://example.com",
+      "status": "confirmed"
+    },
+    {
+      "key": "k2",
+      "priority": "P0",
+      "published_at": "2026-10-20T00:00:00+00:00",
+      "title": "Acorn API outage report",
+      "confidence": 0.98,
+      "discovered_at": "2026-10-26T10:00:00+00:00",
+      "event_type": "release",
+      "evidence": "Acorn API outage report",
+      "source_id": "s",
+      "url": "https://example.com",
+      "status": "confirmed"
+    },
+    {
+      "key": "k3",
+      "priority": "P0",
+      "published_at": "2026-10-18T00:00:00+00:00",
+      "title": "Old Acorn incident",
+      "confidence": 0.98,
+      "discovered_at": "2026-10-26T10:00:00+00:00",
+      "event_type": "release",
+      "evidence": "Old Acorn incident",
+      "source_id": "s",
+      "url": "https://example.com",
+      "status": "confirmed"
+    },
+    {
+      "key": "k4",
+      "priority": "P3",
+      "published_at": "2026-10-26T00:00:00+00:00",
+      "title": "Acorn forum chatter",
+      "confidence": 0.5,
+      "discovered_at": "2026-10-26T10:00:00+00:00",
+      "event_type": "release",
+      "evidence": "Acorn forum chatter",
+      "source_id": "s",
+      "url": "https://example.com",
+      "status": "confirmed"
+    },
+    {
+      "key": "k5",
+      "priority": "P2",
+      "published_at": "2026-10-22T00:00:00+00:00",
+      "title": "Acorn SDK 2 released",
+      "confidence": 0.8,
+      "discovered_at": "2026-10-26T10:00:00+00:00",
+      "event_type": "release",
+      "evidence": "Acorn SDK 2 released",
+      "source_id": "s",
+      "url": "https://example.com",
+      "status": "confirmed"
+    },
+    {
+      "key": "k6",
+      "priority": "P1",
+      "published_at": "",
+      "title": "Acorn pricing page changed",
+      "confidence": 0.85,
+      "discovered_at": "2026-10-25T10:00:00+00:00",
+      "event_type": "release",
+      "evidence": "Acorn pricing page changed",
+      "source_id": "s",
+      "url": "https://example.com",
+      "status": "confirmed"
+    },
+    {
+      "key": "k7",
+      "priority": "P1",
+      "published_at": "2026-10-25T00:00:00+00:00",
+      "title": "ACORN 3 launches!",
+      "confidence": 0.9,
+      "discovered_at": "2026-10-26T10:00:00+00:00",
+      "event_type": "release",
+      "evidence": "ACORN 3 launches!",
+      "source_id": "s",
+      "url": "https://example.com",
+      "status": "confirmed"
+    },
+    {
+      "key": "k8",
+      "priority": "P1",
+      "published_at": "2026-11-15T00:00:00+00:00",
+      "title": "Acorn 2 retires on 15 November",
+      "confidence": 0.95,
+      "discovered_at": "2026-10-26T10:00:00+00:00",
+      "event_type": "release",
+      "evidence": "Acorn 2 retires on 15 November",
+      "source_id": "s",
+      "url": "https://example.com",
+      "status": "confirmed"
+    },
+    {
+      "key": "k9",
+      "priority": "P3",
+      "published_at": "2026-10-24T00:00:00+00:00",
+      "title": "Acorn blog: benchmarks",
+      "confidence": 0.6,
+      "discovered_at": "2026-10-26T10:00:00+00:00",
+      "event_type": "release",
+      "evidence": "Acorn blog: benchmarks",
+      "source_id": "s",
+      "url": "https://example.com",
+      "status": "confirmed"
+    },
+    {
+      "key": "k10",
+      "priority": "P2",
+      "published_at": "2026-10-25T00:00:00+00:00",
+      "title": "Acorn adds webhooks",
+      "confidence": 0.8,
+      "discovered_at": "2026-10-26T10:00:00+00:00",
+      "event_type": "release",
+      "evidence": "Acorn adds webhooks",
+      "source_id": "s",
+      "url": "https://example.com",
+      "status": "confirmed"
+    }
+  ],
+  "cases": [
+    {
+      "now": "2026-10-26T12:00:00+00:00",
+      "limit": 3,
+      "expected": [
+        "k2",
+        "k8",
+        "k1"
+      ]
+    },
+    {
+      "now": "2026-10-28T12:00:00+00:00",
+      "limit": 3,
+      "expected": [
+        "k8",
+        "k1",
+        "k6"
+      ]
+    },
+    {
+      "now": "2026-11-03T12:00:00+00:00",
+      "limit": 3,
+      "expected": [
+        "k8"
+      ]
+    }
+  ]
+}

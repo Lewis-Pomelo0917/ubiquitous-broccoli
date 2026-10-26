@@ -38,6 +38,9 @@ pub struct WatchStatus {
     pub pending_sources: u32,
     pub source_count: u32,
     pub message: String,
+    /// Fields owned by the Python worker (next_due_unix, failure_kinds, ...); kept verbatim.
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, Value>,
 }
 
 impl Default for WatchStatus {
@@ -60,6 +63,7 @@ impl Default for WatchStatus {
             pending_sources: 0,
             source_count: 0,
             message: "正在准备本地情报组件".to_string(),
+            extra: serde_json::Map::new(),
         }
     }
 }
@@ -68,6 +72,8 @@ impl Default for WatchStatus {
 pub struct AiWatchState {
     running: AtomicBool,
     shutdown: AtomicBool,
+    #[cfg_attr(not(windows), allow(dead_code))]
+    refresh: AtomicBool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -615,6 +621,13 @@ fn should_run(status: &WatchStatus) -> bool {
         return true;
     }
     let now = current_unix();
+    // The worker records when the next update is due: tomorrow morning after a good run,
+    // sooner (with backoff) after trouble. Ignore values that are implausibly far away.
+    if let Some(due) = status.extra.get("next_due_unix").and_then(Value::as_u64) {
+        if due <= now.saturating_add(7 * 86_400) {
+            return now >= due;
+        }
+    }
     if status.state == "failed" || status.state == "partial" {
         return status.last_attempt_unix.map(|value| now.saturating_sub(value) >= 3600).unwrap_or(true);
     }
@@ -667,6 +680,24 @@ pub fn read_ai_status(app: &AppHandle) -> Result<String, String> {
         let path = status_path(&app_data_dir(app)?);
         let status = load_status(&path)?;
         serde_json::to_string(&status).map_err(|error| error.to_string())
+    }
+}
+
+/// Ask the scheduler to check the sources now (the user pressed the refresh button).
+pub fn request_refresh(app: &AppHandle) -> Result<String, String> {
+    #[cfg(not(windows))]
+    {
+        let _ = app;
+        return Ok(json!({ "accepted": false, "reason": "unsupported" }).to_string());
+    }
+    #[cfg(windows)]
+    {
+        let state = app.state::<AiWatchState>();
+        if state.running.load(Ordering::SeqCst) {
+            return Ok(r#"{"accepted":false,"reason":"running"}"#.to_string());
+        }
+        state.refresh.store(true, Ordering::SeqCst);
+        Ok(r#"{"accepted":true}"#.to_string())
     }
 }
 
@@ -744,7 +775,8 @@ fn scheduler_loop(app: AppHandle) {
             break;
         }
         let status = load_status(&state_path).unwrap_or_default();
-        if should_run(&status) {
+        let forced = app.state::<AiWatchState>().refresh.swap(false, Ordering::SeqCst);
+        if forced || should_run(&status) {
             let watch_state = app.state::<AiWatchState>();
             if watch_state
                 .running
@@ -755,25 +787,51 @@ fn scheduler_loop(app: AppHandle) {
                 attempt.last_attempt_at = None;
                 attempt.last_attempt_unix = Some(current_unix());
                 let _ = save_status(&state_path, &attempt);
-                let _ = run_worker(&runtime, &data_dir);
+                let outcome = run_worker(&runtime, &data_dir);
                 watch_state.running.store(false, Ordering::SeqCst);
-                let final_status = load_status(&state_path).unwrap_or_else(|_| {
+                let mut final_status = load_status(&state_path).unwrap_or_else(|_| {
                     let mut failed = attempt;
                     failed.state = "failed".to_string();
                     failed.message = "更新状态无法读取；最近成功情报已保留".to_string();
                     failed
                 });
+                // The worker writes its own final state. If it never got that far (could not start,
+                // crashed, or was stopped by the watchdog) say so instead of leaving "updating" behind.
+                if final_status.state == "updating" || final_status.state == "interrupted" {
+                    mark_worker_failure(&mut final_status, outcome.err());
+                }
                 let _ = save_status(&state_path, &final_status);
             }
         }
         for _ in 0..900 {
-            if app.state::<AiWatchState>().shutdown.load(Ordering::SeqCst) {
+            let watch_state = app.state::<AiWatchState>();
+            if watch_state.shutdown.load(Ordering::SeqCst) || watch_state.refresh.load(Ordering::SeqCst) {
                 break;
             }
             thread::sleep(Duration::from_secs(1));
         }
     }
 }
+
+/// Record that the worker ended without publishing a result, and back off before the next try.
+fn mark_worker_failure(status: &mut WatchStatus, reason: Option<String>) {
+    let failures = status
+        .extra
+        .get("consecutive_failures")
+        .and_then(Value::as_u64)
+        .unwrap_or(0)
+        .saturating_add(1);
+    let delay = (1800u64.saturating_mul(1u64 << failures.saturating_sub(1).min(4))).min(6 * 3600);
+    status.state = "failed".to_string();
+    status.message = reason.unwrap_or_else(|| "本机更新异常结束；最近成功情报已保留".to_string());
+    status.extra.insert("consecutive_failures".to_string(), Value::from(failures));
+    status
+        .extra
+        .insert("next_due_unix".to_string(), Value::from(current_unix().saturating_add(delay)));
+}
+
+/// Longest a single update may run: collection budget (20 min) plus the local model budget and slack.
+const WORKER_TIMEOUT: Duration = Duration::from_secs(35 * 60);
 
 #[cfg(windows)]
 fn run_worker(runtime: &Path, data_dir: &Path) -> Result<(), String> {
@@ -827,7 +885,18 @@ fn run_worker(runtime: &Path, data_dir: &Path) -> Result<(), String> {
         let _ = child.wait();
         return Err(error);
     }
-    let output = child.wait_with_output().map_err(|error| format!("本机采集组件异常结束：{error}"))?;
+    // Wait on a helper thread so a hung worker cannot block the scheduler forever.
+    let (sender, receiver) = std::sync::mpsc::channel();
+    thread::spawn(move || {
+        let _ = sender.send(child.wait_with_output());
+    });
+    let output = match receiver.recv_timeout(WORKER_TIMEOUT) {
+        Ok(result) => result.map_err(|error| format!("本机采集组件异常结束：{error}"))?,
+        Err(_) => {
+            drop(job); // closing the job terminates the worker and any model process it started
+            return Err("本机更新超时，已终止；最近成功情报已保留".to_string());
+        }
+    };
     if !output.status.success() {
         let state = load_status(&status).ok();
         if state.as_ref().map(|value| value.state.as_str()) != Some("failed") {
@@ -925,6 +994,89 @@ impl Drop for KillOnCloseJob {
     fn drop(&mut self) {
         use windows_sys::Win32::Foundation::CloseHandle;
         unsafe { CloseHandle(self.0) };
+    }
+}
+
+#[cfg(test)]
+mod schedule_tests {
+    use super::*;
+
+    fn status_from(json: &str) -> WatchStatus {
+        serde_json::from_str(json).expect("status parses")
+    }
+
+    #[test]
+    fn worker_fields_survive_a_rust_rewrite() {
+        let raw = r#"{"schema_version":1,"state":"partial","message":"x","failed_sources":3,
+            "failure_kinds":{"超时":2},"failed_samples":[{"source_id":"a","kind":"超时","message":"m"}],
+            "next_due_unix":1900000000,"consecutive_failures":0,"model_state":"ok","new_items":4}"#;
+        let status = status_from(raw);
+        assert_eq!(status.failed_sources, 3);
+        assert_eq!(status.new_items, 4);
+        let again: Value = serde_json::from_str(&serde_json::to_string(&status).unwrap()).unwrap();
+        assert_eq!(again["failure_kinds"]["超时"], 2);
+        assert_eq!(again["failed_samples"][0]["source_id"], "a");
+        assert_eq!(again["next_due_unix"], 1900000000u64);
+        assert_eq!(again["model_state"], "ok");
+        assert_eq!(again["state"], "partial");
+        assert!(again.get("extra").is_none(), "the flattened map must not appear as a field");
+    }
+
+    #[test]
+    fn missing_fields_fall_back_to_defaults() {
+        let status = status_from(r#"{"state":"updated"}"#);
+        assert_eq!(status.schema_version, 1);
+        assert_eq!(status.state, "updated");
+        assert!(status.extra.is_empty());
+    }
+
+    #[test]
+    fn the_workers_schedule_decides_when_to_run() {
+        let now = current_unix();
+        let mut status = status_from(r#"{"state":"updated"}"#);
+        status.last_success_unix = Some(now);
+        status.extra.insert("next_due_unix".into(), Value::from(now + 3600));
+        assert!(!should_run(&status), "not due yet");
+        status.extra.insert("next_due_unix".into(), Value::from(now - 1));
+        assert!(should_run(&status), "due");
+        status.extra.insert("next_due_unix".into(), Value::from(now + 30 * 86_400));
+        assert!(!should_run(&status), "an implausible schedule falls back to the 24 h rule, and the last success is fresh");
+        status.last_success_unix = Some(now - 90_000);
+        assert!(should_run(&status));
+    }
+
+    #[test]
+    fn interrupted_or_preparing_always_runs_and_old_statuses_keep_the_fixed_rules() {
+        let now = current_unix();
+        for state in ["interrupted", "preparing"] {
+            let mut status = status_from(r#"{}"#);
+            status.state = state.into();
+            assert!(should_run(&status));
+        }
+        let mut failed = status_from(r#"{"state":"failed"}"#);
+        failed.last_attempt_unix = Some(now - 600);
+        assert!(!should_run(&failed));
+        failed.last_attempt_unix = Some(now - 4000);
+        assert!(should_run(&failed));
+    }
+
+    #[test]
+    fn a_worker_that_never_finished_is_reported_with_growing_backoff() {
+        let mut status = status_from(r#"{"state":"updating"}"#);
+        let before = current_unix();
+        let mut delays = Vec::new();
+        for _ in 0..7 {
+            mark_worker_failure(&mut status, Some("本机采集组件无法启动".to_string()));
+            assert_eq!(status.state, "failed");
+            assert_eq!(status.message, "本机采集组件无法启动");
+            delays.push(status.extra["next_due_unix"].as_u64().unwrap() - before);
+        }
+        let near = |value: u64, expected: u64| value >= expected && value <= expected + 5;
+        assert!(near(delays[0], 1800) && near(delays[1], 3600) && near(delays[2], 7200) && near(delays[3], 14400));
+        assert!(near(delays[4], 21600) && near(delays[5], 21600) && near(delays[6], 21600));
+        assert_eq!(status.extra["consecutive_failures"], 7);
+        mark_worker_failure(&mut status, None);
+        assert!(status.message.contains("异常结束"));
     }
 }
 

@@ -14,6 +14,11 @@ fn read_ai_status(app: tauri::AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn refresh_ai_news(app: tauri::AppHandle) -> Result<String, String> {
+    ai_watch::request_refresh(&app)
+}
+
+#[tauri::command]
 fn hide_to_tray(window: tauri::WebviewWindow) -> Result<(), String> {
     window.hide().map_err(|error| format!("无法最小化到托盘：{error}"))
 }
@@ -86,6 +91,7 @@ pub fn run() {
     builder = builder.invoke_handler(tauri::generate_handler![
         read_ai_feed,
         read_ai_status,
+        refresh_ai_news,
         hide_to_tray,
         exit_application
     ]);
