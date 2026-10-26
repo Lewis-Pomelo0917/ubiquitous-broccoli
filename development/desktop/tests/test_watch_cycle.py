@@ -368,6 +368,23 @@ class CycleTests(unittest.TestCase):
         self.assertEqual(returncode, 3)
         self.assertLess(time.monotonic() - started, 20)
 
+    def test_a_feed_that_fails_validation_never_replaces_the_last_good_one(self):
+        PAGES["/changelog"] = changelog([(long_date(1), ["Launched the Acorn 3 model with a 1M token context window."])])
+        self.add_source("changelog", "/changelog")
+        self.cycle()
+        kept = self.args.feed.read_bytes()
+        PAGES["/changelog"] = changelog([(long_date(0), ["Launched the Acorn 4 model with a 2M token context window."]),
+                                          (long_date(1), ["Launched the Acorn 3 model with a 1M token context window."])])
+
+        def blank_key(events, now, limit=50, tz=None):
+            return [dict(events[0], key="")]  # a blank event key is not a valid feed
+
+        with patch("ai_radar.watch.cap_events", side_effect=blank_key):
+            status = self.cycle()
+        self.assertEqual(status["state"], "failed")
+        self.assertEqual(self.args.feed.read_bytes(), kept)
+        self.assertEqual(self.cycle()["new_items"], 1)  # nothing was lost: the next cycle publishes it
+
     def test_a_corrupt_state_database_is_set_aside_and_rebuilt(self):
         PAGES["/changelog"] = changelog([(long_date(1), ["Launched the Acorn 3 model with a 1M token context window."])])
         self.add_source("changelog", "/changelog")
