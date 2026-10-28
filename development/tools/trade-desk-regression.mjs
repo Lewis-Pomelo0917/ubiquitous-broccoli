@@ -690,8 +690,8 @@ assert.match(html, /event\.summary_mode === 'extractive-v1'/);
 assert.match(html, /home-ai-summary-note/);
 const aiFixture = JSON.parse(await readFile(join(root, 'development', 'desktop', 'tests', 'fixtures', 'display-selection.json'), 'utf8'));
 const aiCardNames = ['aiFeedPriorityOrder', 'aiFeedText', 'aiFeedPriority', 'aiFeedDate', 'aiFeedWindowDays', 'aiFeedDayNumber', 'aiFeedLocalDay', 'aiFeedEventDay',
-  'aiFeedNormalize', 'aiFeedRepeatsTitle', 'aiFeedDisplayEvents', 'aiFeedDayLabel', 'aiFeedEvidenceAfterTitle', 'aiFeedSummaryText', 'aiFeedStatusText', 'aiFeedStatusTitle', 'aiFeedBusy', 'aiFeedFailureSummary'];
-const aiCard = evaluate(aiCardNames, {}, ['aiFeedDisplayEvents', 'aiFeedDayLabel', 'aiFeedSummaryText', 'aiFeedRepeatsTitle', 'aiFeedDate', 'aiFeedStatusText', 'aiFeedStatusTitle', 'aiFeedFailureSummary']);
+  'aiFeedNormalize', 'aiFeedRepeatsTitle', 'aiFeedTypeGroups', 'aiFeedGroup', 'aiFeedDisplayEvents', 'aiFeedDayLabel', 'aiFeedEvidenceAfterTitle', 'aiFeedSummaryText', 'aiFeedStatusText', 'aiFeedStatusTitle', 'aiFeedBusy', 'aiFeedFailureSummary'];
+const aiCard = evaluate(aiCardNames, {}, ['aiFeedGroup', 'aiFeedDisplayEvents', 'aiFeedDayLabel', 'aiFeedSummaryText', 'aiFeedRepeatsTitle', 'aiFeedDate', 'aiFeedStatusText', 'aiFeedStatusTitle', 'aiFeedFailureSummary']);
 for (const testCase of aiFixture.cases) {
   assert.deepEqual(
     Array.from(aiCard.api.aiFeedDisplayEvents(aiFixture.events, new Date(testCase.now), testCase.limit), (event) => event.key),
@@ -706,6 +706,23 @@ for (const testCase of aiFixture.zone_cases) {
     `首页 AI 观察在固定时区下的日界与窗口边界必须与 Python 一致: ${testCase.name}`
   );
 }
+const viewNow = new Date('2026-10-28T12:00:00Z');
+const viewEvents = [
+  { key: 'p0-old', priority: 'P0', event_type: 'release', title: 'Old big launch', published_at: '2026-10-20' },
+  { key: 'p3-new', priority: 'P3', event_type: 'pricing', title: 'Price tweak', published_at: '2026-10-28' },
+  { key: 'p1-mid', priority: 'P1', event_type: 'security', title: 'Outage', published_at: '2026-10-25' },
+  { key: 'p2-ancient', priority: 'P2', event_type: 'research', title: 'Paper', published_at: '2026-09-10' }
+];
+const viewKeys = (view, limit = Infinity) => Array.from(aiCard.api.aiFeedDisplayEvents(viewEvents, viewNow, limit, 0, view), (event) => event.key);
+assert.deepEqual(viewKeys({}), ['p1-mid', 'p3-new'], '默认视图沿用按优先级的近期窗口');
+assert.deepEqual(viewKeys({ days: 7 }), ['p3-new', 'p1-mid'], '按天数浏览时最新的排在前面');
+assert.deepEqual(viewKeys({ days: 30 }), ['p3-new', 'p1-mid', 'p0-old'], '30 天范围包含一周前的条目，不含更早的');
+assert.deepEqual(viewKeys({ days: 30, group: 'model' }), ['p0-old'], '类别筛选只留下该类条目');
+assert.deepEqual(viewKeys({ days: 30, group: 'all' }, 2), ['p3-new', 'p1-mid'], '“全部”不筛选，且仍受条数上限约束');
+assert.equal(aiCard.api.aiFeedGroup({ event_type: 'content_change' }), 'other');
+assert.equal(aiCard.api.aiFeedGroup({ event_type: 'open_weights' }), 'model');
+assert.match(html, /id="home-ai-range"/);
+assert.match(html, /id="home-ai-more"[^>]*aria-expanded=/);
 for (const testCase of aiFixture.summary_cases) {
   assert.equal(aiCard.api.aiFeedRepeatsTitle(testCase.summary, testCase.title), testCase.hidden, `摘要与标题重复的判定必须与 Python 一致: ${testCase.title} / ${testCase.summary}`);
 }

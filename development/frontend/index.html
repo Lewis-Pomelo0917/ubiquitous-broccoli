@@ -2070,6 +2070,57 @@
     .home-ai-time { flex: 0 0 auto; color: var(--faint); font-variant-numeric: tabular-nums; }
     .home-ai-empty { padding: 26px 0 7px; color: var(--muted); font-size: 13px; text-align: center; }
     .home-ai-empty.is-error { color: var(--danger); }
+    .home-ai-toolbar { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 8px; padding-top: 12px; }
+    .home-ai-toolbar[hidden] { display: none; }
+    .home-ai-chips { display: flex; min-width: 0; flex-wrap: wrap; gap: 5px; }
+    .home-ai-chip {
+      min-height: 26px;
+      padding: 0 9px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      cursor: pointer;
+      transition: background .15s ease, border-color .15s ease, color .15s ease;
+    }
+    .home-ai-chip[hidden] { display: none; }
+    .home-ai-chip:hover { background: var(--surface-soft); color: var(--text); }
+    .home-ai-chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-hover); }
+    .home-ai-chip:focus-visible,
+    .home-ai-more:focus-visible { outline: 0; box-shadow: var(--focus-ring); }
+    .home-ai-range {
+      flex: 0 0 auto;
+      min-height: 26px;
+      padding: 0 6px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-small);
+      outline: 0;
+      background: var(--field-bg);
+      color: var(--text);
+      font-size: 11px;
+    }
+    .home-ai-range:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
+    .home-ai-events.is-expanded { max-height: min(62vh, 560px); overflow-y: auto; overscroll-behavior: contain; }
+    .home-ai-more {
+      display: block;
+      width: 100%;
+      min-height: 30px;
+      margin-top: 4px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-button-compact);
+      background: transparent;
+      color: var(--accent);
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background .15s ease, color .15s ease;
+    }
+    .home-ai-more[hidden] { display: none; }
+    .home-ai-more:hover { background: var(--surface-soft); color: var(--text); }
+    @media (prefers-reduced-motion: reduce) { .home-ai-chip, .home-ai-more { transition: none; } }
 
     /* ============ TD-GRAY-CLAY-BLUE: consolidated visual system ============ */
     html { -webkit-text-size-adjust: 100%; }
@@ -2694,6 +2745,7 @@
       .placeholder-mark,
       .welcome-cover::before,
       .app-dialog-close,
+      .home-ai-chip,
       .back-to-top { corner-shape: round; }
     }
 
@@ -2845,9 +2897,26 @@
                 <button class="home-ai-refresh" type="button" id="home-ai-refresh" aria-label="立即检查更新" title="立即检查更新" hidden><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
               </div>
             </div>
+            <div class="home-ai-toolbar" id="home-ai-toolbar" hidden>
+              <div class="home-ai-chips" role="group" aria-label="按类别筛选">
+                <button class="home-ai-chip" type="button" data-ai-group="all" aria-pressed="true">全部</button>
+                <button class="home-ai-chip" type="button" data-ai-group="model" aria-pressed="false">模型</button>
+                <button class="home-ai-chip" type="button" data-ai-group="api" aria-pressed="false">API·价格</button>
+                <button class="home-ai-chip" type="button" data-ai-group="security" aria-pressed="false">安全</button>
+                <button class="home-ai-chip" type="button" data-ai-group="industry" aria-pressed="false">产业·政策</button>
+                <button class="home-ai-chip" type="button" data-ai-group="research" aria-pressed="false">研究·工具</button>
+                <button class="home-ai-chip" type="button" data-ai-group="other" aria-pressed="false">其他</button>
+              </div>
+              <select class="home-ai-range" id="home-ai-range" aria-label="时间范围">
+                <option value="recent" selected>近期重点</option>
+                <option value="7">近 7 天</option>
+                <option value="30">近 30 天</option>
+              </select>
+            </div>
             <div class="home-ai-events" id="home-ai-events" aria-live="polite">
               <div class="home-ai-empty">正在读取…</div>
             </div>
+            <button class="home-ai-more" type="button" id="home-ai-more" aria-controls="home-ai-events" aria-expanded="false" hidden>展开全部</button>
           </aside>
         </div>
       </section>
@@ -6495,10 +6564,22 @@
         const size = (value) => Array.from(value).length;
         return Boolean(head) && (key === head || head.includes(key) || (key.includes(head) && size(key) <= size(head) + 12));
       };
-      const aiFeedDisplayEvents = (events, now = new Date(), limit = 3, offsetMinutes) => {
+      const aiFeedTypeGroups = {
+        release: 'model', open_weights: 'model',
+        api: 'api', pricing: 'api', deprecation: 'api', reset: 'api', cloud_availability: 'api',
+        security: 'security',
+        industry: 'industry', policy: 'industry', compute: 'industry',
+        research: 'research', tool: 'research', benchmark: 'research'
+      };
+      const aiFeedGroup = (event) => aiFeedTypeGroups[aiFeedText(event && event.event_type)] || 'other';
+      // view.days: one window for every priority, newest first (browsing); unset keeps the per-priority home windows.
+      // view.group: only events of that category group ('all' or unset for every group).
+      const aiFeedDisplayEvents = (events, now = new Date(), limit = 3, offsetMinutes, view = {}) => {
         const today = aiFeedLocalDay(now, offsetMinutes);
+        const days = Number.isFinite(view.days) ? view.days : null;
+        const group = view.group && view.group !== 'all' ? view.group : '';
         const ranked = events
-          .filter((event) => event && typeof event === 'object')
+          .filter((event) => event && typeof event === 'object' && (!group || aiFeedGroup(event) === group))
           .map((event) => {
             const day = aiFeedEventDay(event, offsetMinutes);
             const discovered = aiFeedDate(event.discovered_at);
@@ -6510,9 +6591,8 @@
               discovered: discovered ? discovered.getTime() : 0
             };
           })
-          .filter((item) => item.age <= aiFeedWindowDays[aiFeedPriority(item.event.priority)])
-          .sort((left, right) => left.rank - right.rank
-            || left.age - right.age
+          .filter((item) => item.age <= (days === null ? aiFeedWindowDays[aiFeedPriority(item.event.priority)] : days))
+          .sort((left, right) => (days === null ? left.rank - right.rank || left.age - right.age : left.age - right.age || left.rank - right.rank)
             || right.confidence - left.confidence
             || right.discovered - left.discovered
             || (aiFeedText(left.event.key) < aiFeedText(right.event.key) ? -1 : aiFeedText(left.event.key) > aiFeedText(right.event.key) ? 1 : 0));
@@ -6601,7 +6681,75 @@
         return Number(status.failed_sources) + ' 个来源未响应' + (kinds ? '：' + kinds : '') + (aiFeedBusy(status) ? '' : '。可点右上角刷新重试，或检查网络与代理。');
       };
       const aiFeedBusy = (status) => ['preparing', 'updating'].includes(aiFeedText(status && status.state));
-      const aiFeedVisibleEvents = () => aiFeedDisplayEvents(aiFeedState.feed && Array.isArray(aiFeedState.feed.events) ? aiFeedState.feed.events : []);
+      const aiFeedCompactLimit = 3;
+      const aiFeedViewKey = 'tradeDesk.aiWatchView';
+      const aiFeedView = { group: 'all', range: 'recent', expanded: false };
+      try {
+        const stored = JSON.parse(localStorage.getItem(aiFeedViewKey) || '{}');
+        if (stored && typeof stored === 'object') {
+          if (['all', 'model', 'api', 'security', 'industry', 'research', 'other'].includes(stored.group)) aiFeedView.group = stored.group;
+          if (['recent', '7', '30'].includes(stored.range)) aiFeedView.range = stored.range;
+          aiFeedView.expanded = stored.expanded === true;
+        }
+      } catch (_) {}
+      const saveAiFeedView = () => {
+        try { localStorage.setItem(aiFeedViewKey, JSON.stringify(aiFeedView)); } catch (_) {}
+      };
+      const aiFeedRangeDays = () => aiFeedView.range === 'recent' ? undefined : Number(aiFeedView.range);
+      const aiFeedAllEvents = () => aiFeedState.feed && Array.isArray(aiFeedState.feed.events) ? aiFeedState.feed.events : [];
+      // Every event the chosen range and category allow; the card shows the first three unless expanded.
+      const aiFeedMatchingEvents = () => aiFeedDisplayEvents(aiFeedAllEvents(), new Date(), Infinity, undefined, { days: aiFeedRangeDays(), group: aiFeedView.group });
+      const homeAiToolbar = document.getElementById('home-ai-toolbar');
+      const homeAiRange = document.getElementById('home-ai-range');
+      const homeAiMore = document.getElementById('home-ai-more');
+      const homeAiChips = homeAiToolbar ? Array.from(homeAiToolbar.querySelectorAll('[data-ai-group]')) : [];
+      const homeAiChipNames = Object.fromEntries(homeAiChips.map((chip) => [chip.dataset.aiGroup, chip.textContent]));
+      // Controls are updated in place, never rebuilt, so the minute poll keeps keyboard focus where it was.
+      const renderHomeAiControls = (showing, total) => {
+        if (!homeAiToolbar) return;
+        const hasFeed = Boolean(aiFeedState.feed) && !aiFeedState.error && aiFeedAllEvents().length > 0;
+        homeAiToolbar.hidden = !hasFeed;
+        if (homeAiRange) homeAiRange.value = aiFeedView.range;
+        const counts = {};
+        aiFeedDisplayEvents(aiFeedAllEvents(), new Date(), Infinity, undefined, { days: aiFeedRangeDays() })
+          .forEach((event) => { const group = aiFeedGroup(event); counts[group] = (counts[group] || 0) + 1; counts.all = (counts.all || 0) + 1; });
+        homeAiChips.forEach((chip) => {
+          const group = chip.dataset.aiGroup;
+          const count = counts[group] || 0;
+          const active = aiFeedView.group === group;
+          chip.hidden = group !== 'all' && !count && !active;
+          chip.setAttribute('aria-pressed', active ? 'true' : 'false');
+          const text = homeAiChipNames[group] + (count ? ' ' + count : '');
+          if (chip.textContent !== text) chip.textContent = text;
+        });
+        if (homeAiMore) {
+          homeAiMore.hidden = !hasFeed || total <= aiFeedCompactLimit;
+          homeAiMore.setAttribute('aria-expanded', aiFeedView.expanded ? 'true' : 'false');
+          const text = aiFeedView.expanded ? '收起' : '展开全部 ' + total + ' 条（还有 ' + (total - showing) + ' 条）';
+          if (homeAiMore.textContent !== text) homeAiMore.textContent = text;
+        }
+        homeAiEvents.classList.toggle('is-expanded', aiFeedView.expanded && total > aiFeedCompactLimit);
+      };
+      homeAiChips.forEach((chip) => chip.addEventListener('click', () => {
+        aiFeedView.group = chip.dataset.aiGroup;
+        saveAiFeedView();
+        renderHomeAi();
+      }));
+      if (homeAiRange) {
+        homeAiRange.addEventListener('change', () => {
+          aiFeedView.range = ['recent', '7', '30'].includes(homeAiRange.value) ? homeAiRange.value : 'recent';
+          saveAiFeedView();
+          renderHomeAi();
+        });
+      }
+      if (homeAiMore) {
+        homeAiMore.addEventListener('click', () => {
+          aiFeedView.expanded = !aiFeedView.expanded;
+          saveAiFeedView();
+          renderHomeAi();
+          if (!aiFeedView.expanded) homeAiEvents.scrollTop = 0;
+        });
+      }
       const safeAiUrl = (value) => {
         try {
           const raw = aiFeedText(value).trim();
@@ -6634,11 +6782,13 @@
           homeAiRefresh.setAttribute('aria-busy', busy ? 'true' : 'false');
         }
         if (aiFeedState.loading && !aiFeedState.feed) {
+          renderHomeAiControls(0, 0);
           next.innerHTML = '<div class="home-ai-empty">正在读取…</div>';
           commitHomeAi(next);
           return;
         }
         if (aiFeedState.error) {
+          renderHomeAiControls(0, 0);
           const empty = document.createElement('div');
           empty.className = 'home-ai-empty is-error';
           empty.textContent = 'AI 情报暂不可用';
@@ -6646,7 +6796,18 @@
           commitHomeAi(next);
           return;
         }
-        const events = aiFeedVisibleEvents();
+        const matching = aiFeedMatchingEvents();
+        const events = aiFeedView.expanded ? matching : matching.slice(0, aiFeedCompactLimit);
+        renderHomeAiControls(events.length, matching.length);
+        const filtered = aiFeedView.group !== 'all' || aiFeedView.range !== 'recent';
+        if (!events.length && filtered && aiFeedAllEvents().length) {
+          const empty = document.createElement('div');
+          empty.className = 'home-ai-empty';
+          empty.textContent = '此范围内暂无' + (aiFeedView.group === 'all' ? '' : homeAiChipNames[aiFeedView.group] + '类') + '情报';
+          next.appendChild(empty);
+          commitHomeAi(next);
+          return;
+        }
         if (!events.length) {
           const empty = document.createElement('div');
           const state = aiFeedText(aiFeedState.status && aiFeedState.status.state);
