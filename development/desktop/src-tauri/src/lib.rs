@@ -1,16 +1,21 @@
 #[cfg(desktop)]
 use tauri::Manager;
 
+mod ai_watch;
+
 #[tauri::command]
-fn read_ai_feed() -> Result<String, String> {
-    let executable = std::env::current_exe()
-        .map_err(|error| format!("无法定位应用程序：{error}"))?;
-    let directory = executable
-        .parent()
-        .ok_or_else(|| "无法定位应用程序目录".to_string())?;
-    let feed_path = directory.join("ai-intelligence.json");
-    std::fs::read_to_string(&feed_path)
-        .map_err(|error| format!("无法读取本地 AI 情报（{}）：{error}", feed_path.display()))
+fn read_ai_feed(app: tauri::AppHandle) -> Result<String, String> {
+    ai_watch::read_ai_feed(&app)
+}
+
+#[tauri::command]
+fn read_ai_status(app: tauri::AppHandle) -> Result<String, String> {
+    ai_watch::read_ai_status(&app)
+}
+
+#[tauri::command]
+fn refresh_ai_news(app: tauri::AppHandle) -> Result<String, String> {
+    ai_watch::request_refresh(&app)
 }
 
 #[tauri::command]
@@ -39,7 +44,7 @@ fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     };
 
-    let open_item = MenuItem::with_id(app, "open", "打开 Trade Desk", true, None::<&str>)?;
+    let open_item = MenuItem::with_id(app, "open", "打开 Cubic", true, None::<&str>)?;
     let quit_item = MenuItem::with_id(app, "quit", "退出程序", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open_item, &quit_item])?;
     let icon = app
@@ -74,6 +79,7 @@ fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default();
+    builder = builder.manage(ai_watch::AiWatchState::default());
 
     #[cfg(desktop)]
     {
@@ -82,15 +88,29 @@ pub fn run() {
         }));
     }
 
-    builder = builder
-        .invoke_handler(tauri::generate_handler![read_ai_feed, hide_to_tray, exit_application]);
+    builder = builder.invoke_handler(tauri::generate_handler![
+        read_ai_feed,
+        read_ai_status,
+        refresh_ai_news,
+        hide_to_tray,
+        exit_application
+    ]);
 
     #[cfg(desktop)]
     {
-        builder = builder.setup(|app| setup_tray(app));
+        builder = builder.setup(|app| {
+            setup_tray(app)?;
+            ai_watch::start(app.handle().clone()).map_err(std::io::Error::other)?;
+            Ok(())
+        });
     }
 
-    builder
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+    let app = builder
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+    app.run(|app, event| {
+        if matches!(event, tauri::RunEvent::Exit) {
+            ai_watch::shutdown(&app);
+        }
+    });
 }

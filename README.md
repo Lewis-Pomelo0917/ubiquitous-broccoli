@@ -1,4 +1,4 @@
-# Trade Desk
+# Cubic
 
 面向印刷文具与纸品外贸工作的轻量 Windows 桌面工具，覆盖常见的规格估算、包装换算、金额英文、色彩查询、跨时区查看和本地备忘。应用以原生 HTML、CSS、JavaScript 与 Tauri 2 构建，优先在本机完成输入和计算。
 
@@ -6,7 +6,7 @@
 
 ## 产品定位
 
-Trade Desk 面向处理 notebooks、exercise books、journals、planners 等纸品订单的业务人员。日常工作中反复出现的产品尺寸、箱规、数量、重量、CBM、金额文字和跟进事项，可以在同一个桌面窗口里快速核算、查看和复制。
+Cubic（原名 Trade Desk）面向处理 notebooks、exercise books、journals、planners 等纸品订单的业务人员。日常工作中反复出现的产品尺寸、箱规、数量、重量、CBM、金额文字和跟进事项，可以在同一个桌面窗口里快速核算、查看和复制。
 
 它是若干日常小工具的集合，不是 ERP，也不负责完整报价流程、订单生命周期、库存、生产进度、单据审核或订舱。应用不会替用户判断 PO 分配、实际出货、合同币种或客户规则。输入来自哪里、单位是什么以及结果是否适用于正式单据，仍由使用者核实。
 
@@ -18,7 +18,7 @@ Trade Desk 面向处理 notebooks、exercise books、journals、planners 等纸�
 
 | 模块 | 用途与当前能力 | 使用边界 |
 | --- | --- | --- |
-| 主页 | 快捷打开七个工具页；“AI 观察”显示本地情报文件中当天最多三条事件，可按来源查看安全的网页链接。 | 读取应用旁的 `ai-intelligence.json`；不是云端聊天、联网搜索或应用内采集器。没有有效本地情报时会显示空态或错误提示。 |
+| 主页 | 快捷打开七个工具页；“AI 观察”显示最近几天最重要的至多三条本地情报（近 7 天 P0/P1、近 3 天 P2/P3），带来源链接、发布日期与证据摘录，并可手动立即刷新。 | Cubic 在应用运行期间自主管理公开来源更新；采集需联网，模型推理在本机离线运行。失败/部分失败（含失败来源原因）与“今日暂无新增”分开展示。 |
 | 体积 / CBM | 输入外箱长宽高、统一尺寸单位、箱数、每箱本数、实际总本数和单本净重，查看单箱/整票 CBM 与净重；可复制结果。另有几何装箱辅助和 20GP、40GP、40HQ 方案估算。 | 几何装箱是参考，不覆盖主计算中的手工数量、总体积或毛重。装柜方案使用有效容积与 28,000 kg/柜经验载重基准，不自动组合混合柜型；道路、船公司、托盘、柜门和实际装载等限制须另行核实。净重不含包装，毛重应包括产品、内外包装及托盘。 |
 | 本册进阶 | 按成品尺寸、内页数量（页或张）、纸种、克重/每张厚度、封面封底材质与厚度、装订方式及附加重量，估算单本厚度、体积和净重；重量以 kg 为主、g 为辅，可一键带入 CBM 的单本重量。 | 这是参数估算，不是称重或供应商规格证明。页数按双面折算纸张数，奇数页需确认；厚度字段为每张 Caliper。纸质封面可按克重估算，PP 可参考密度；其他非纸材质应使用实测数据。 |
 | 金额英文 | 支持 USD、EUR、GBP、CNY、JPY、HKD、SGD、AUD、CAD、CHF、KRW；可选单据分数格式或完整英文、大小写、美式/英式英语，以及自动四舍五入或严格提示，并复制结果。另提供不带币种的整数英文大写。 | 这是金额文字表达工具，不验证合同、汇率或财务政策。小数位依币种设置；结果用于单据文字时，仍须按合同币种和公司财务规则复核。 |
@@ -26,6 +26,14 @@ Trade Desk 面向处理 notebooks、exercise books、journals、planners 等纸�
 | 潘通查询 | 从本地公开参考色数据中按色号或名称筛选，并按 C、U、Metallic C 系列查看色卡；详情显示 HEX、RGB、CMYK，可复制色号或 HEX。 | 屏幕换算颜色只用于快速沟通和初步对色。不同纸张、油墨、涂布和显示器会产生色差，不能替代实体色卡或印刷打样。 |
 | 世界时钟 | 同屏查看上海、中欧、伦敦、纽约、洛杉矶、迪拜和悉尼的本地时间、日期及 UTC 偏移。 | 时间根据设备时钟和时区数据库显示；联系客户前请确认设备时间设置。 |
 | 备忘录 | 本机记录标题、纯文本正文、日期、分类、标签和状态；支持搜索、日历与筛选、置顶、归档、复制、导出和导入备份。 | 内容保存在浏览器本地存储，不提供云同步。导入会合并记录并生成新 ID，重复导入同一备份可能出现重复项；删除需二次确认。 |
+
+## AI 观察更新与完整单文件包
+
+Tauri 后台约每天清晨一次（出错时退避重试，也可在首页手动刷新）调用内嵌 Python 标准库运行时，并发读取公开来源，使用规则筛选、日期检查、来源证据和去重；Qwen3-0.6B 只从证据中选择原文片段，不改写或生成日期、价格、分类、优先级或新闻。疑似提示注入文本不送入模型；摘要必须能在对应证据中逐字找到；模型结果不合格时改用规则摘录（同样是证据原文），不会因此丢失当天新闻。
+
+采集结果和状态保存在 Tauri `app_local_data_dir()` 下，路径不依赖 EXE 所在目录，因此同一 Windows 用户移动或改名 EXE 后仍复用模型缓存与本地情报。首次启动从单文件包内释放组件；模型不会在用户端下载，也不要求另装 Python 或模型软件。更换电脑会使用该电脑自己的应用数据，不自动迁移私人备忘、主题或历史。完整包包含锁定的 llama.cpp 所需 Visual C++ runtime DLL；Windows 10/11 的 UCRT 属于系统组件，WebView2 Runtime 仍是桌面应用平台前提。采集新情报仍需联网，模型推理可离线。
+
+Tauri `--no-bundle` 仅生成基础应用，不代表已包含模型。完整交付必须再运行 `development/desktop/scripts/build_ai_runtime.ps1`；该步骤按 `resource-lock.json` 在构建机获取并校验模型、Python embeddable runtime 与 llama.cpp CPU 组件，然后把它们附加到基础 EXE。用户只接收最终单个 EXE。模型权重、EXE、AI 新闻快照、账号文件和数据库均不进入 Git 历史；第三方版本、SHA-256、许可与 Claude 前端交接约定见 [`AI-WATCH.md`](development/desktop/AI-WATCH.md)。
 
 ## 常见操作路径
 
@@ -37,7 +45,7 @@ Trade Desk 面向处理 notebooks、exercise books、journals、planners 等纸�
 
 ## 桌面体验与设计方向
 
-当前界面采用暖白、灰陶蓝和浅/深主题，正文使用系统无衬线字体，标题沿用既有衬线字体栈及前端提供的 Noto Serif SC 资源；对应字体许可文件为 [OFL-1.1.txt](development/frontend/fonts/OFL-1.1.txt)。正式 Logo 以 SVG 为基准。桌面窗口默认 900×700，最小 640×520；控件、状态提示、结果卡片和弹窗沿用同一套颜色、间距、边框、圆角与焦点样式。
+当前界面采用暖白、灰陶蓝和浅/深主题，正文使用系统无衬线字体，标题沿用既有衬线字体栈及前端提供的 Noto Serif SC 资源；对应字体许可文件为 [OFL-1.1.txt](development/frontend/fonts/OFL-1.1.txt)。正式 Logo 以 SVG 为基准。桌面窗口默认 900×700，最小 640×520；控件、状态提示、结果卡片和弹窗沿用同一套颜色、间距、边框、圆角与焦点样式；圆角默认使用超椭圆，规则见 [DESIGN.md](DESIGN.md)。
 
 顶部导航已实现液态透镜效果，材质与动态借鉴 Apple Music 底栏的液态玻璃观感。单击可切换；按住并拖动时先预览，松开后才切页；取消或失焦会还原，左右边缘有回弹，键盘方向键、Home、End 可切换，减少动态偏好会降低动画。后续设计不应把它简化成普通透明标签栏，也要保留可读性、窄窗滚动和现有切页语义。
 
@@ -50,6 +58,7 @@ Trade Desk 面向处理 notebooks、exercise books、journals、planners 等纸�
 - 前端页面、样式和主要交互集中在 [`development/frontend/index.html`](development/frontend/index.html)。导航使用 `.tab`、`.view`、`data-view`、ARIA 状态和现有 `activateView` 流程；改 DOM 或事件绑定前，应沿调用关系确认程序化跳转、键盘和鼠标行为仍然衔接。
 - [`development/frontend/pantone-data.js`](development/frontend/pantone-data.js) 保存本地潘通参考数据；Logo、字体及字体许可文件位于 `development/frontend/`。
 - [development/desktop/package.json](development/desktop/package.json) 所在目录是唯一 Tauri 主工程。桌面配置位于 [`tauri.conf.json`](development/desktop/src-tauri/tauri.conf.json)，Rust 入口为 [`lib.rs`](development/desktop/src-tauri/src/lib.rs)。Tauri 的 `frontendDist` 是相对 `src-tauri` 的 `../../frontend`。
+- AI 观察实现、运行时状态、锁定资源、单文件打包和 Claude 前端交接见 [`development/desktop/AI-WATCH.md`](development/desktop/AI-WATCH.md)。
 - `outputs/` 在完整本地交付目录中放正式 EXE 与配套 `ai-intelligence.json`；`work/` 放带 `TASK.md` 的任务与候选；`archive/` 存历史任务和发布凭据。GitHub 源码快照可能不含本地分发文件及完整任务/历史目录。
 
 ## 给 Claude Code 与仓库协作者
@@ -82,7 +91,7 @@ cd development/desktop
 npm run tauri -- build --no-bundle --ci --config "../../work/<任务>/build/tauri.frontend.json"
 ```
 
-命令中的 `<任务>` 是占位符，须换成实际任务目录名，并且只在暂存和配置都已准备、`frontendDist` 已正确解析后运行。是否能构建还取决于当前环境具备相应 Node/npm、Rust 和平台工具链。`ai-intelligence.json` 不随源码仓库提供；运行时 Rust 会从 EXE 同目录读取，缺少时首页情报显示不可用。不要把 EXE、旧构建或用户备忘复制进前端暂存或源码仓库。
+命令中的 `<任务>` 是占位符，须换成实际任务目录名，并且只在暂存和配置都已准备、`frontendDist` 已正确解析后运行。是否能构建还取决于当前环境具备相应 Node/npm、Rust 和平台工具链。完整 AI 观察候选还须在基础 EXE 生成后运行 `scripts/build_ai_runtime.ps1`；该脚本从锁定清单下载/校验构建资源并附加单文件载荷。运行时 Rust 从 Tauri 应用数据目录读取/写入情报，绝不要求 EXE 旁置 JSON。不要把 EXE、模型权重、新闻快照、账号文件、数据库、日志或用户备忘提交到源码仓库。
 
 ## 数据与交付边界
 

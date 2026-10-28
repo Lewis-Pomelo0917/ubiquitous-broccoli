@@ -659,9 +659,43 @@ assert.match(html, /@media \(max-width: 900px\)[\s\S]*\.pantone-results \{ max-h
 
 assert.match(html, /class="tab-lens" aria-hidden="true"/);
 assert.match(html, /\.tabs\.has-lens \.tab\.is-preview/);
-assert.match(html, /@supports \(corner-shape: squircle\)[\s\S]*corner-shape:\s*squircle;/);
-const squircleRule = html.match(/@supports \(corner-shape: squircle\)\s*\{([\s\S]*?)\}\s*\}/)?.[1] || '';
-assert.doesNotMatch(squircleRule, /\.tabs-wrap|\.tabs-shell|\.tab-lens|\.tab\s*[,\{]/, '导航玻璃胶囊不能继承面板方圆角');
+assert.match(html, /class="tab-lens-shadow" aria-hidden="true"/);
+for (const selector of ['.tab-lens', '.tab-lens.is-pressed']) {
+  const rule = html.match(new RegExp(`\\n\\s*${selector.replace(/\./g, '\\.')} \\{([^}]*)\\}`))?.[1] || '';
+  const shadow = rule.match(/box-shadow:\s*([^;]+);/)?.[1] || '';
+  assert.ok(shadow && shadow.split(',').every((part) => part.trim().startsWith('inset')), `${selector} 只能用内阴影；外投影会让折射贴图偏移，应放在 .tab-lens-shadow`);
+}
+const cornerBlock = html.match(/@supports \(corner-shape: superellipse\(1\.5\)\) \{\n([\s\S]*?)\n    \}\n/)?.[1] || '';
+assert.match(cornerBlock, /\*, ::before, ::after \{ corner-shape: superellipse\(1\.5\); \}/);
+const roundCorners = new Set((cornerBlock.match(/([^{}]+)\{ corner-shape: round; \}/)?.[1] || '').split(',').map((part) => part.trim()));
+const finalRadius = new Map();
+for (const [, selectors, radius] of html.slice(html.indexOf('<style'), html.indexOf('</style>')).replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{[^{}]*?border-radius:\s*([^;]+);/g)) {
+  for (const selector of selectors.split(',')) finalRadius.set(selector.trim().replace(/\s+/g, ' '), radius.trim());
+}
+for (const [selector, radius] of finalRadius) {
+  if (/^(999px|50%|inherit)$/.test(radius)) assert.ok(roundCorners.has(selector), `${selector} 是胶囊或圆形，须保持 corner-shape: round；导航玻璃胶囊不能继承面板方圆角`);
+}
+for (const selector of ['.tabs-shell', '.tab', '.tab-lens', '.tab-lens-shadow']) assert.ok(roundCorners.has(selector), `${selector} 须保持胶囊圆端`);
+// DESIGN.md: rectangular surfaces and controls use a radius token and the one shared superellipse rule; only pills and circles opt out.
+const styleSheet = html.slice(html.indexOf('<style'), html.indexOf('</style>')).replace(/\/\*[\s\S]*?\*\//g, '');
+for (const [, value] of styleSheet.matchAll(/border(?:-[a-z]+)*-radius:\s*([^;]+);/g)) {
+  assert.match(value.trim(), /^(var\(--radius-[a-z-]+\)|999px|50%|inherit|0)$/, `圆角须使用 --radius-* 令牌（胶囊/圆形除外）：${value}`);
+}
+for (const selector of roundCorners) assert.match(finalRadius.get(selector) || '', /^(999px|50%|inherit)$/, `${selector} 不是胶囊或圆形，不能退出超椭圆圆角`);
+assert.equal((styleSheet.match(/corner-shape\s*:[^;{}]*;/g) || []).length, (cornerBlock.match(/corner-shape\s*:[^;{}]*;/g) || []).length, 'corner-shape 只在共享的 @supports 规则里设置，不在组件里单独覆盖');
+const radiusTokens = [...new Set([...html.matchAll(/(--radius-[a-z-]+):/g)].map((match) => match[1]))];
+const designDoc = await readFile(join(root, 'DESIGN.md'), 'utf8');
+for (const token of radiusTokens) assert.ok(designDoc.includes(token), `DESIGN.md 须说明圆角令牌 ${token}`);
+assert.match(designDoc, /corner-shape: superellipse\(1\.5\)/);
+assert.match(await readFile(join(root, 'AGENTS.md'), 'utf8'), /\[DESIGN\.md\]\(DESIGN\.md\)/, 'AGENTS.md 须链接 DESIGN.md');
+for (const selector of ['.home-ai-chip', '.home-ai-select', '.home-ai-more']) {
+  assert.match(finalRadius.get(selector) || '', /^var\(--radius-(button-compact|small)\)$/, `${selector} 须使用紧凑控件的圆角令牌`);
+  assert.ok(!roundCorners.has(selector), `${selector} 是矩形控件，须保持超椭圆圆角`);
+}
+assert.equal((html.match(/<select class="home-ai-select" id="home-ai-(range|sort)"/g) || []).length, 2, 'AI 观察的时间范围和排序选择共用 .home-ai-select');
+assert.match(styleSheet, /\.home-ai-chip\[aria-pressed="true"\] \{ border-color: var\(--accent\); background: var\(--accent-soft\); color: var\(--accent-hover\); \}/, 'AI 观察类别按钮的选中态沿用置顶按钮的强调色');
+assert.match(styleSheet, /\.home-ai-select:focus \{ border-color: var\(--accent\); box-shadow: var\(--focus-ring\); \}/);
+assert.match(styleSheet, /\.home-ai-chip:focus-visible,\s*\.home-ai-more:focus-visible \{ outline: 0; box-shadow: var\(--focus-ring\); \}/, 'AI 观察按钮的键盘焦点使用共享焦点环');
 assert.match(html, /\.tab\.is-active \{[\s\S]*?font-weight: 500;/);
 assert.match(html, /\[t\.ready, t\.updateCallbackDone, t\.finished\]\.forEach/);
 assert.match(html, /handleViewTransitionRejection/);
@@ -670,6 +704,145 @@ assert.match(html, /外贸常用工具，一处完成。/);
 assert.doesNotMatch(html, /class="welcome-cover-mark"|class="welcome-meta"|class="welcome-actions"/);
 assert.match(html, /\.welcome-grid > \.home-ai-card \{ align-self: start; box-shadow: none; \}/);
 assert.match(html, /class="memo-calendar-card"[^>]*open/);
+assert.ok(html.includes("invoke('read_ai_status')"), 'AI observation must read the worker status separately from feed data');
+assert.match(html, /state === 'no_new_items'/);
+assert.match(html, /event\.summary_mode === 'extractive-v1'/);
+assert.match(html, /home-ai-summary-note/);
+const aiFixture = JSON.parse(await readFile(join(root, 'development', 'desktop', 'tests', 'fixtures', 'display-selection.json'), 'utf8'));
+const aiCardNames = ['aiFeedPriorityOrder', 'aiFeedText', 'aiFeedPriority', 'aiFeedDate', 'aiFeedWindowDays', 'aiFeedDayNumber', 'aiFeedLocalDay', 'aiFeedEventDay',
+  'aiFeedNormalize', 'aiFeedRepeatsTitle', 'aiFeedTypeGroups', 'aiFeedGroup', 'aiFeedCompareKeys', 'aiFeedByPriority', 'aiFeedByNewest', 'aiFeedDisplayEvents', 'aiFeedDayLabel', 'aiFeedEvidenceAfterTitle', 'aiFeedSummaryText', 'aiFeedStatusText', 'aiFeedStatusTitle', 'aiFeedBusy', 'aiFeedFailureSummary', 'aiFeedViewChoices', 'aiFeedReadView'];
+const aiCard = evaluate(aiCardNames, {}, ['aiFeedReadView', 'aiFeedGroup', 'aiFeedDisplayEvents', 'aiFeedDayLabel', 'aiFeedSummaryText', 'aiFeedRepeatsTitle', 'aiFeedDate', 'aiFeedStatusText', 'aiFeedStatusTitle', 'aiFeedFailureSummary']);
+for (const testCase of aiFixture.cases) {
+  assert.deepEqual(
+    Array.from(aiCard.api.aiFeedDisplayEvents(aiFixture.events, new Date(testCase.now), testCase.limit), (event) => event.key),
+    testCase.expected,
+    `首页 AI 观察的选择规则必须与 Python 工作进程一致: ${testCase.now}`
+  );
+}
+for (const testCase of aiFixture.zone_cases) {
+  assert.deepEqual(
+    Array.from(aiCard.api.aiFeedDisplayEvents(aiFixture.zone_events, new Date(testCase.now), testCase.limit, testCase.tz_offset_minutes), (event) => event.key),
+    testCase.expected,
+    `首页 AI 观察在固定时区下的日界与窗口边界必须与 Python 一致: ${testCase.name}`
+  );
+}
+const viewNow = new Date('2026-10-28T12:00:00Z');
+const viewEvents = [
+  { key: 'p0-old', priority: 'P0', event_type: 'release', title: 'Old big launch', published_at: '2026-10-20' },
+  { key: 'p3-new', priority: 'P3', event_type: 'pricing', title: 'Price tweak', published_at: '2026-10-28' },
+  { key: 'p1-mid', priority: 'P1', event_type: 'security', title: 'Outage', published_at: '2026-10-25' },
+  { key: 'p2-ancient', priority: 'P2', event_type: 'research', title: 'Paper', published_at: '2026-09-10' }
+];
+const viewKeys = (view, limit = Infinity, events = viewEvents) => Array.from(aiCard.api.aiFeedDisplayEvents(events, viewNow, limit, 0, view), (event) => event.key);
+assert.deepEqual(viewKeys({}), ['p1-mid', 'p3-new'], '默认视图沿用按优先级的近期窗口');
+assert.deepEqual(viewKeys({ days: 7 }), ['p1-mid', 'p3-new'], '时间范围只筛选，不改变默认的优先级排序');
+assert.deepEqual(viewKeys({ days: 30 }), ['p0-old', 'p1-mid', 'p3-new'], '30 天范围包含一周前的条目，不含更早的');
+assert.deepEqual(viewKeys({ days: 30, group: 'model' }), ['p0-old'], '类别筛选只留下该类条目');
+assert.deepEqual(viewKeys({ days: 30, group: 'all' }, 2), ['p0-old', 'p1-mid'], '“全部”不筛选，且仍受条数上限约束');
+// Publication dates, discovery times and priorities that disagree, so each sort shows which one it follows.
+const sortEvents = [
+  { key: 'a', priority: 'P0', event_type: 'release', title: 'Acme 5 launches', published_at: '2026-10-26', discovered_at: '2026-10-28T09:00:00Z' },
+  { key: 'b', priority: 'P2', event_type: 'pricing', title: 'Price change', discovered_at: '2026-10-27T10:00:00Z' },
+  { key: 'c', priority: 'P2', event_type: 'release', title: 'Mini model', published_at: '2026-10-28T06:00:00Z', discovered_at: '2026-10-28T06:30:00Z' },
+  { key: 'd', priority: 'P1', event_type: 'security', title: 'Outage report', published_at: '2026-10-28', discovered_at: '2026-10-28T11:00:00Z' },
+  { key: 'e', priority: 'P2', event_type: 'research', title: 'New paper', discovered_at: '2026-10-28T08:00:00Z' },
+  { key: 'f', priority: 'P1', event_type: 'release', title: 'Weights out', published_at: '2026-10-27', discovered_at: '2026-10-27T05:00:00Z' },
+  { key: 'g', priority: 'P3', event_type: 'release', title: 'Acme 5 launches!', published_at: '2026-10-28', discovered_at: '2026-10-28T10:00:00Z' },
+  { key: 'h', priority: 'P2', event_type: 'policy', title: 'Rule one', published_at: '2026-10-25', discovered_at: '2026-10-25T01:00:00Z' },
+  { key: 'i', priority: 'P2', event_type: 'policy', title: 'Rule two', published_at: '2026-10-25', discovered_at: '2026-10-25T01:00:00Z' }
+];
+const byPriority = ['a', 'd', 'f', 'e', 'c', 'b', 'h', 'i'];
+const byNewest = ['e', 'c', 'd', 'b', 'f', 'a', 'h', 'i'];
+assert.deepEqual(viewKeys({ days: 30 }, Infinity, sortEvents), byPriority, '优先级优先：P0→P3，同级内较新的日期在前');
+assert.deepEqual(viewKeys({ days: 30, sort: 'priority' }, Infinity, sortEvents), byPriority, '未选排序与“优先级优先”一致');
+assert.deepEqual(viewKeys({ days: 30, sort: 'newest' }, Infinity, sortEvents), byNewest, '最新优先：有发布日期按发布日期（a 虽然最近才发现仍排在后面），没有时按发现时间');
+for (const [sort, expected] of [['priority', byPriority], ['newest', byNewest]]) {
+  assert.deepEqual(viewKeys({ days: 30, sort }, Infinity, [...sortEvents].reverse()), expected, `${sort} 排序与输入顺序无关，刷新后不会跳动`);
+}
+assert.deepEqual(viewKeys({ days: 30, sort: 'newest' }, 3, sortEvents), ['e', 'c', 'd'], '收起时的三条取自筛选和排序之后');
+assert.deepEqual(viewKeys({ days: 30, sort: 'newest', group: 'model' }, Infinity, sortEvents), ['c', 'f', 'a'], '排序与类别筛选同时生效');
+assert.deepEqual(viewKeys({ days: 30, sort: 'priority', group: 'model' }, Infinity, sortEvents), ['a', 'f', 'c']);
+assert.deepEqual(viewKeys({ sort: 'newest' }, Infinity, [...sortEvents, { key: 'old-p3', priority: 'P3', title: 'Old minor', published_at: '2026-10-24' }]), byNewest, '最新优先仍受近期窗口约束');
+assert.deepEqual(viewKeys({ days: 30, sort: 'newest' }, Infinity, [...sortEvents, { key: 'soon', priority: 'P2', title: 'Retires next week', published_at: '2026-11-04' }])[0], 'soon', '将来生效的日期按今天计');
+assert.deepEqual(viewKeys({ days: 30, sort: 'newest' }, 2, [
+  { key: 'later', priority: 'P2', title: 'Retires in two weeks', published_at: '2026-11-11' },
+  { key: 'sooner', priority: 'P1', title: 'Retires next week', published_at: '2026-11-04' }
+]), ['sooner', 'later'], '几条将来日期都按今天计，再按优先级排，不按日期远近');
+// UTC+8: discovered at 01:00 local today vs published 04:00 local yesterday by its UTC date; the order follows the day labels.
+assert.deepEqual(Array.from(aiCard.api.aiFeedDisplayEvents([
+  { key: 'yesterday', priority: 'P2', title: 'Published late UTC', published_at: '2026-10-27T20:00:00Z' },
+  { key: 'today', priority: 'P2', title: 'Seen after local midnight', discovered_at: '2026-10-27T17:00:00Z' }
+], new Date('2026-10-28T02:00:00Z'), Infinity, 480, { days: 7, sort: 'newest' }), (event) => event.key), ['today', 'yesterday'], '最新优先与“今天/昨天”标签的日期一致');
+const shuffledTies = [{ key: 't2', priority: 'P2', title: 'Tie two', published_at: '2026-10-25' }, { key: 't1', priority: 'P2', title: 'Tie one', published_at: '2026-10-25' }];
+assert.deepEqual(Array.from(aiCard.api.aiFeedDisplayEvents(shuffledTies, viewNow, Infinity, 0, { days: 30, sort: 'newest' }), (event) => event.key), ['t1', 't2'], '完全相同的条目按事件键固定顺序');
+const readView = (raw) => ({ ...aiCard.api.aiFeedReadView(raw) });
+assert.deepEqual(readView('{"group":"model","range":"30","expanded":true}'), { group: 'model', range: '30', sort: 'priority', expanded: true }, '没有排序值的旧偏好仍可读取，并使用默认排序');
+assert.deepEqual(readView('{"group":"api","range":"7","sort":"newest","expanded":false}'), { group: 'api', range: '7', sort: 'newest', expanded: false });
+assert.deepEqual(readView('{"sort":"oldest","group":"nope"}'), { group: 'all', range: 'recent', sort: 'priority', expanded: false });
+assert.deepEqual(readView('not json'), { group: 'all', range: 'recent', sort: 'priority', expanded: false });
+assert.deepEqual(readView(''), { group: 'all', range: 'recent', sort: 'priority', expanded: false });
+assert.match(html, /aiFeedViewKey = 'tradeDesk\.aiWatchView'/, 'AI 观察视图偏好沿用原存储键');
+assert.equal(aiCard.api.aiFeedGroup({ event_type: 'content_change' }), 'other');
+assert.equal(aiCard.api.aiFeedGroup({ event_type: 'open_weights' }), 'model');
+assert.match(html, /id="home-ai-range"/);
+assert.match(html, /<select class="home-ai-select" id="home-ai-sort" aria-label="排序方式">\s*<option value="priority" selected>优先级优先<\/option>\s*<option value="newest">最新优先<\/option>/, '排序选择默认“优先级优先”');
+assert.match(html, /id="home-ai-more"[^>]*aria-expanded=/);
+for (const testCase of aiFixture.summary_cases) {
+  assert.equal(aiCard.api.aiFeedRepeatsTitle(testCase.summary, testCase.title), testCase.hidden, `摘要与标题重复的判定必须与 Python 一致: ${testCase.title} / ${testCase.summary}`);
+}
+assert.equal(aiCard.api.aiFeedSummaryText({ title: 'Introducing Acorn 3', evidence: 'Introducing Acorn 3\nIntroducing Acorn 3, our most capable model, now available in the API.', summary_mode: 'rule-v1', summary: 'Introducing Acorn 3, our most capable model, now available in the API.' }),
+  'Introducing Acorn 3, our most capable model, now available in the API.', '以标题开头但内容更多的摘要不应被隐藏');
+assert.equal(aiCard.api.aiFeedSummaryText({ title: 'Acorn 3 launches', evidence: 'Acorn 3 launches\nIt reads longer documents than any earlier model.' }),
+  'It reads longer documents than any earlier model.', '没有可信摘要时回退到去掉标题的证据');
+assert.equal(aiCard.api.aiFeedDate('2026-10-20T10:00:00').toISOString(), '2026-10-20T10:00:00.000Z', '无时区的时间戳按 UTC 解读，与 Python 工作进程一致');
+assert.equal(aiCard.api.aiFeedDate('2026-10-20 10:00').toISOString(), '2026-10-20T10:00:00.000Z');
+assert.equal(aiCard.api.aiFeedDate('2026-10-20T10:00:00+08:00').toISOString(), '2026-10-20T02:00:00.000Z');
+assert.equal(aiCard.api.aiFeedDate('not a date'), null);
+assert.doesNotMatch(html, /aiFeedIsToday|aiFeedTodayEvents/, '首页 AI 观察不应只显示发现于当天的条目');
+const aiNow = new Date(2026, 9, 26, 12, 0, 0);
+const dayLabel = (published, extra = {}) => aiCard.api.aiFeedDayLabel({ published_at: published, ...extra }, aiNow);
+assert.equal(dayLabel('2026-10-26T00:00:00+00:00'), '今天');
+assert.equal(dayLabel('2026-10-25T00:00:00+00:00'), '昨天');
+assert.equal(dayLabel('2026-10-23T00:00:00+00:00'), '3 天前');
+assert.equal(dayLabel('2026-10-10T00:00:00+00:00'), '10月10日');
+assert.equal(dayLabel('2026-11-15T00:00:00+00:00'), '11月15日生效');
+assert.equal(dayLabel('', { discovered_at: new Date(2026, 9, 26, 8).toISOString() }), '今天');
+assert.equal(dayLabel(''), '');
+const aiEvidence = '先发布了新模型。\nThe endpoint now accepts batches of requests.';
+const aiSummary = (extra) => aiCard.api.aiFeedSummaryText({ title: 'Acorn 3 launches', evidence: aiEvidence, ...extra });
+assert.equal(aiSummary({ summary: 'The endpoint now accepts batches of requests.', summary_mode: 'rule-v1' }), 'The endpoint now accepts batches of requests.');
+assert.equal(aiSummary({ summary: 'The endpoint now accepts batches of requests.', summary_mode: 'extractive-v1' }), 'The endpoint now accepts batches of requests.');
+assert.equal(aiSummary({ summary: 'Invented sentence that is not in the evidence.', summary_mode: 'extractive-v1' }), aiEvidence.slice(0, 180), '未通过原文校验的摘要必须回退到证据原文');
+assert.equal(aiCard.api.aiFeedSummaryText({ title: 'Acorn 3 launches!', evidence: 'Acorn 3 launches', summary_mode: 'rule-v1', summary: '' }), '', '与标题重复的摘要不应再显示一遍');
+const recent = new Date(Date.now() - 3600 * 1000).toISOString();
+assert.equal(aiCard.api.aiFeedStatusText({ state: 'partial', failed_sources: 12, pending_sources: 0, new_items: 0, last_success_at: recent }), '已检查 · 12 个来源未响应');
+assert.equal(aiCard.api.aiFeedStatusText({ state: 'partial', failed_sources: 2, pending_sources: 1, new_items: 3, last_success_at: recent }), '更新 +3 · 3 个来源未响应');
+assert.equal(aiCard.api.aiFeedStatusText({ state: 'partial', failed_sources: 2, new_items: 0, last_success_at: new Date(Date.now() - 3 * 86400000).toISOString() }), '部分失败 · 过期');
+assert.equal(aiCard.api.aiFeedStatusText({ state: 'no_new_items', last_success_at: new Date(Date.now() - 25 * 3600000).toISOString() }), '今日暂无新增', '每日一次的更新在到点前不应提前显示“数据过期”');
+assert.equal(aiCard.api.aiFeedStatusText({ state: 'no_new_items', last_success_at: new Date(Date.now() - 37 * 3600000).toISOString() }), '数据过期');
+assert.equal(aiCard.api.aiFeedStatusText({ state: 'no_new_items', last_success_at: recent }), '今日暂无新增');
+const aiTooltip = aiCard.api.aiFeedStatusTitle({ state: 'partial', failed_sources: 12, failure_kinds: { '被拦截': 4, '超时': 8, '其他': 0 }, model_state: 'unavailable', message: '已更新 2 条情报' });
+assert.match(aiTooltip, /失败来源：12（被拦截 4、超时 8）/);
+assert.match(aiTooltip, /本地模型暂不可用/);
+const failureStatus = { state: 'partial', failed_sources: 12, failure_kinds: { '超时': 8, '被拦截': 4 } };
+assert.match(aiCard.api.aiFeedFailureSummary(failureStatus), /^12 个来源未响应：超时 8、被拦截 4。可点右上角刷新重试/);
+assert.equal(aiCard.api.aiFeedFailureSummary({ ...failureStatus, state: 'updating' }), '12 个来源未响应：超时 8、被拦截 4');
+assert.equal(aiCard.api.aiFeedFailureSummary({ state: 'updated', failed_sources: 0 }), '');
+assert.match(html, /id="home-ai-refresh"/);
+assert.match(html, /home-ai-refresh\[aria-disabled="true"\]/, '刷新按钮忙碌时用 aria-disabled，避免键盘焦点被 disabled 夺走');
+assert.doesNotMatch(html, /homeAiRefresh\.disabled/, '刷新按钮不应使用 disabled 属性');
+assert.match(html, /next\.innerHTML === homeAiEvents\.innerHTML/, '内容未变化时不应重建 AI 卡片，否则轮询会丢失键盘焦点并重复朗读');
+assert.ok(html.includes("invoke('refresh_ai_news')"), '首页 AI 观察的手动刷新必须调用 Rust 命令，而不是由前端自行采集');
+assert.match(await readFile(join(root, 'development', 'desktop', 'src-tauri', 'src', 'lib.rs'), 'utf8'), /refresh_ai_news,/);
+const aiWatchRust = await readFile(join(root, 'development', 'desktop', 'src-tauri', 'src', 'ai_watch.rs'), 'utf8');
+assert.match(aiWatchRust, /app_local_data_dir\(\)/);
+assert.match(aiWatchRust, /CUBICAI1/);
+assert.match(aiWatchRust, /JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE/);
+const aiWatchWorker = await readFile(join(root, 'development', 'desktop', 'ai_radar', 'watch.py'), 'utf8');
+assert.match(aiWatchWorker, /suspicious_instruction/);
+assert.match(aiWatchWorker, /summary_mode/);
+assert.match(aiWatchWorker, /replace_with_retry/, '情报文件必须经带重试的原子替换发布');
+assert.match(await readFile(join(root, 'development', 'desktop', 'ai_radar', 'core.py'), 'utf8'), /os\.replace/);
 for (const file of ['development/desktop/package.json', 'development/desktop/package-lock.json',
   'development/desktop/src-tauri/tauri.conf.json', 'development/desktop/src-tauri/Cargo.toml',
   'development/desktop/src-tauri/Cargo.lock']) {

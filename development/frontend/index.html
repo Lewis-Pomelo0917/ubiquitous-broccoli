@@ -7,7 +7,7 @@
   <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#191C1B">
   <meta name="color-scheme" content="light dark">
   <link rel="icon" href="./trade-desk-logo.svg" type="image/svg+xml">
-  <title>Trade Desk · 外贸实用工具</title>
+  <title>Cubic · 外贸实用工具</title>
   <script>try{var __tdt=localStorage.getItem('td-theme');if(__tdt==='dark'||__tdt==='light')document.documentElement.setAttribute('data-theme',__tdt);}catch(__e){}</script>
   <style>
     :root {
@@ -958,8 +958,24 @@
       overflow-wrap: anywhere;
     }
 
+    .amount-result-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 11px;
+    }
+
+    .amount-copy {
+      display: flex;
+      flex: 0 0 auto;
+      align-items: center;
+      gap: 10px;
+    }
+
     .amount-result-formula {
-      margin: 11px 0 0;
+      min-width: 0;
+      margin: 0;
       color: var(--muted);
       font-size: 11px;
       font-variant-numeric: tabular-nums;
@@ -1293,6 +1309,84 @@
       margin-top: 6px;
       color: var(--faint);
       font-size: 10px;
+    }
+
+    .pantone-pager {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px 16px;
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .pantone-page-size { display: inline-flex; align-items: center; gap: 8px; }
+    .pantone-page-size select {
+      min-height: 32px;
+      padding: 0 8px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-small);
+      outline: 0;
+      background: var(--field-bg);
+      color: var(--text);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+    .pantone-page-size select:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
+    .pantone-pages { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+    .pantone-pages[hidden] { display: none; }
+    .pantone-page-btn {
+      min-width: 32px;
+      min-height: 32px;
+      padding: 0 9px;
+      border: 1px solid transparent;
+      border-radius: var(--radius-button-compact);
+      background: transparent;
+      color: var(--text);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+    }
+    .pantone-page-btn:hover:not(:disabled) { background: var(--btn-hover); }
+    .pantone-page-btn[aria-current="page"] { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+    .pantone-page-gap { min-width: 20px; color: var(--faint); text-align: center; }
+
+    /* Back to top: rises in with a soft spring once the page is well scrolled, sinks away quickly. */
+    .back-to-top {
+      position: fixed;
+      right: max(22px, env(safe-area-inset-right));
+      bottom: max(24px, env(safe-area-inset-bottom));
+      z-index: 30;
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: var(--shadow-md);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateY(16px) scale(.82);
+      transition: opacity 180ms cubic-bezier(.4, 0, 1, 1), transform 220ms cubic-bezier(.4, 0, 1, 1), visibility 0s linear 220ms;
+    }
+    .back-to-top.is-visible {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: none;
+      transition: opacity 260ms cubic-bezier(.25, .1, .25, 1), transform 560ms cubic-bezier(.34, 1.4, .64, 1), visibility 0s;
+    }
+    .back-to-top.is-visible:hover { transform: translateY(-2px); }
+    .back-to-top.is-visible:active { transform: scale(.9); transition-duration: 120ms; }
+    .back-to-top:focus-visible { outline: 0; box-shadow: var(--focus-ring), var(--shadow-md); }
+    .back-to-top svg { width: 18px; height: 18px; }
+    @media (max-width: 560px) {
+      .back-to-top { right: 16px; bottom: 18px; width: 40px; height: 40px; }
     }
 
     .pantone-empty {
@@ -1888,6 +1982,29 @@
 
     .home-ai-title { margin: 0; color: var(--text); font-size: 17px; font-weight: 600; letter-spacing: 0; }
     .home-ai-day { color: var(--muted); font-size: 12px; }
+    .home-ai-head-tools { display: flex; min-width: 0; align-items: center; gap: 6px; }
+    .home-ai-refresh {
+      display: inline-grid;
+      flex: 0 0 auto;
+      width: 28px;
+      height: 28px;
+      margin: -4px -6px -4px 0;
+      padding: 0;
+      place-items: center;
+      border: 1px solid transparent;
+      border-radius: var(--radius-button-compact);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: background .15s ease, border-color .15s ease, color .15s ease;
+    }
+    .home-ai-refresh[hidden] { display: none; }
+    .home-ai-refresh:hover:not([aria-disabled="true"]) { border-color: var(--line); background: var(--surface-soft); color: var(--text); }
+    .home-ai-refresh:focus-visible { outline: 0; box-shadow: var(--focus-ring); }
+    .home-ai-refresh[aria-disabled="true"] { cursor: default; opacity: .6; }
+    .home-ai-refresh.is-busy svg { animation: home-ai-spin 1s linear infinite; }
+    @keyframes home-ai-spin { to { transform: rotate(360deg); } }
+    .home-ai-empty-detail { padding: 2px 8px 6px; color: var(--muted); font-size: 11px; line-height: 1.5; text-align: center; }
     .home-ai-events { min-width: 0; }
     .home-ai-item { min-width: 0; padding: 14px 0; }
     .home-ai-item + .home-ai-item { border-top: 1px solid var(--line); }
@@ -1947,10 +2064,64 @@
       font-size: 11px;
       line-height: 1.45;
     }
+    .home-ai-summary { margin: 8px 26px 0 35px; color: var(--text); font-size: 12px; line-height: 1.55; }
+    .home-ai-summary-note { margin: 5px 26px 0 35px; color: var(--muted); font-size: 10px; line-height: 1.4; }
     .home-ai-source { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .home-ai-time { flex: 0 0 auto; color: var(--faint); font-variant-numeric: tabular-nums; }
     .home-ai-empty { padding: 26px 0 7px; color: var(--muted); font-size: 13px; text-align: center; }
     .home-ai-empty.is-error { color: var(--danger); }
+    /* View controls follow Cubic's compact controls (DESIGN.md): radius tokens, so they take the shared superellipse corner. */
+    .home-ai-toolbar { display: grid; min-width: 0; gap: 8px; padding-top: 12px; }
+    .home-ai-toolbar[hidden] { display: none; }
+    .home-ai-chips { display: flex; min-width: 0; flex-wrap: wrap; gap: 5px; }
+    .home-ai-view-options { display: flex; min-width: 0; flex-wrap: wrap; gap: 6px; }
+    .home-ai-chip {
+      min-height: 28px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-button-compact);
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      cursor: pointer;
+      transition: background .15s ease, border-color .15s ease, color .15s ease;
+    }
+    .home-ai-chip[hidden] { display: none; }
+    .home-ai-chip:hover { background: var(--surface-soft); color: var(--text); }
+    .home-ai-chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-hover); }
+    .home-ai-select {
+      min-height: 28px;
+      padding: 0 8px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-small);
+      outline: 0;
+      background: var(--field-bg);
+      color: var(--text);
+      font-size: 12px;
+    }
+    .home-ai-select:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
+    .home-ai-events.is-expanded { max-height: min(62vh, 560px); overflow-y: auto; overscroll-behavior: contain; }
+    .home-ai-more {
+      display: block;
+      width: 100%;
+      min-height: 30px;
+      margin-top: 4px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-button-compact);
+      background: transparent;
+      color: var(--accent);
+      font: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background .15s ease, color .15s ease;
+    }
+    .home-ai-more[hidden] { display: none; }
+    .home-ai-more:hover { background: var(--surface-soft); color: var(--text); }
+    .home-ai-chip:active,
+    .home-ai-more:active { transform: translateY(1px); }
+    @media (prefers-reduced-motion: reduce) { .home-ai-chip, .home-ai-more { transition: none; } }
 
     /* ============ TD-GRAY-CLAY-BLUE: consolidated visual system ============ */
     html { -webkit-text-size-adjust: 100%; }
@@ -2078,6 +2249,13 @@
       overflow: visible;
     }
     .brand-mark img { display: block; width: 100%; height: 100%; }
+    .brand-mark .brand-logo-dark { display: none; }
+    html[data-theme="dark"] .brand-mark .brand-logo { display: none; }
+    html[data-theme="dark"] .brand-mark .brand-logo-dark { display: block; }
+    @media (prefers-color-scheme: dark) {
+      html:not([data-theme="light"]) .brand-mark .brand-logo { display: none; }
+      html:not([data-theme="light"]) .brand-mark .brand-logo-dark { display: block; }
+    }
     .brand-name {
       font-family: var(--font-display);
       font-size: 18px;
@@ -2145,9 +2323,13 @@
       border: 1px solid var(--nav-rim);
       border-radius: 999px;
       background: var(--nav-bg);
-      box-shadow: 0 8px 22px var(--nav-shadow), inset 0 1px 1px #ffffff70, inset 0 -1px 1px #ffffff35;
+      box-shadow: 0 8px 22px var(--nav-shadow), inset 0 1px 1px #ffffff70, inset 0 -1px 1px #ffffff35, var(--nav-edge-start, 0 0 #0000), var(--nav-edge-end, 0 0 #0000);
       pointer-events: none;
+      transition: box-shadow 180ms ease;
     }
+    /* Narrow windows: shade the rail end that still hides tabs. */
+    .tabs-wrap.can-scroll-start { --nav-edge-start: inset 22px 0 16px -16px var(--nav-shadow); }
+    .tabs-wrap.can-scroll-end { --nav-edge-end: inset -22px 0 16px -16px var(--nav-shadow); }
     .tabs-viewport {
       position: relative;
       padding: 18px 5px;
@@ -2184,23 +2366,37 @@
     .tab.is-active { background: var(--thumb-bg); color: var(--accent-hover); font-weight: 500; }
     .tabs.has-lens .tab.is-active { background: transparent; color: var(--text); }
     .tabs.has-lens .tab.is-preview { color: var(--accent-hover); }
-    .tab-lens {
+    /* Hover pill sits where the resting lens would, so the target is clear before pressing. */
+    .tabs.has-lens .tab::before { content: ""; position: absolute; inset: 8px 4px; z-index: -1; border-radius: inherit; background: var(--btn-hover); opacity: 0; transition: opacity 160ms ease; pointer-events: none; }
+    .tabs.has-lens .tab:hover::before { opacity: .7; }
+    .tabs.has-lens .tab.is-preview::before,
+    .tabs.is-dragging .tab::before { opacity: 0; }
+    .tabs.is-scrubbing,
+    .tabs.is-scrubbing .tab { cursor: grabbing; }
+    .tab-lens,
+    .tab-lens-shadow {
       position: absolute;
       left: 0;
       top: 0;
-      z-index: 3;
       width: 90px;
       height: 48px;
-      border: 1px solid var(--nav-rim);
       border-radius: 999px;
-      background: var(--thumb-bg);
-      box-shadow: inset 0 1px 2px #ffffff99, inset 0 -1px 1px #ffffff75, 0 3px 8px var(--nav-shadow);
       pointer-events: none;
       transform-origin: center;
       will-change: transform;
     }
+    .tab-lens {
+      z-index: 3;
+      border: 1px solid var(--nav-rim);
+      background: var(--thumb-bg);
+      box-shadow: inset 0 1px 2px #ffffff99, inset 0 -1px 1px #ffffff75;
+    }
+    /* The drop shadow lives on its own layer: an outer shadow on the lens would grow its
+       composited bounds and push the refraction map off-centre. */
+    .tab-lens-shadow { z-index: 2; box-shadow: 0 3px 8px var(--nav-shadow); transition: box-shadow 180ms ease; }
+    .tab-lens-shadow.is-pressed { box-shadow: 0 10px 22px var(--nav-shadow), 0 2px 5px var(--nav-shadow); }
     .tab-lens::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(150deg, #ffffff28, transparent 32%, transparent 66%, #ffffff20); pointer-events: none; }
-    .tab-lens.is-pressed { box-shadow: inset 1px 1px 2px #ffffff99, inset -1px -1px 1px #ffffff90, 0 8px 18px var(--nav-shadow); }
+    .tab-lens.is-pressed { box-shadow: inset 1px 1px 2px #ffffff99, inset -1px -1px 1px #ffffff90; }
     .tab-lens-filters { position: absolute; width: 0; height: 0; pointer-events: none; }
     @supports (backdrop-filter: blur(1px)) {
       .tabs-shell { background: var(--nav-glass); backdrop-filter: blur(3px) saturate(1.12); }
@@ -2247,7 +2443,7 @@
       justify-content: space-between;
       gap: 16px;
       margin: 0 auto;
-      padding: 24px;
+      padding: 24px 24px 84px;
       color: var(--faint);
       font-size: 11px;
     }
@@ -2496,7 +2692,9 @@
     .memo-calendar-day:focus-visible,
     .memo-list-open:focus-visible,
     .memo-tag:focus-visible,
-    .home-ai-link:focus-visible { outline: 0; box-shadow: var(--focus-ring); }
+    .home-ai-link:focus-visible,
+    .home-ai-chip:focus-visible,
+    .home-ai-more:focus-visible { outline: 0; box-shadow: var(--focus-ring); }
     button:disabled { cursor: not-allowed; opacity: .45; }
 
     .view.is-active { animation: td-view-in 200ms cubic-bezier(.22, 1, .36, 1) both; }
@@ -2519,25 +2717,38 @@
       to { opacity: 0; transform: translate3d(0, -3px, 0); }
     }
 
-    @supports (corner-shape: squircle) {
-      .panel,
-      .welcome-cover,
-      .home-ai-card,
-      .btn,
-      .mini-btn,
-      .calc-key,
-      .welcome-tile,
-      .pantone-card,
-      .memo-card-head,
-      .memo-calendar-day,
-      .memo-list-open,
-      .memo-tag,
-      .home-ai-link,
-      .memo-calendar-card,
-      .memo-list-card,
-      .memo-editor,
-      .world-clock-card,
-      .container-estimate { corner-shape: squircle; }
+    /* Superellipse corners on every cornered surface. superellipse(1.5) sits between round and squircle, and the
+       ~1.7x radii keep corners slightly softer than the circular fallback while easing into the straight edges.
+       Pills and circles keep round ends: a superellipse squares them off, and the tab lens refraction map assumes a capsule. */
+    @supports (corner-shape: superellipse(1.5)) {
+      :root {
+        --radius-panel: 30px;
+        --radius-card: 20px;
+        --radius-control: 15px;
+        --radius-small: 10px;
+        --radius-button: 17px;
+        --radius-button-compact: 14px;
+      }
+      *, ::before, ::after { corner-shape: superellipse(1.5); }
+      /* Under half the chip height, so tags stay distinct from the round flag pills beside them. */
+      .memo-tag { border-radius: var(--radius-small); }
+      /* Tighter resizable corner keeps the native resize grip inside the curve. */
+      .memo-editor-textarea { border-end-end-radius: var(--radius-small); }
+      .tabs-shell,
+      .tab,
+      .tabs.has-lens .tab::before,
+      .tab-lens,
+      .tab-lens::after,
+      .tab-lens-shadow,
+      .local-badge,
+      .local-badge::before,
+      .sample-tag,
+      .container-plan-tag,
+      .memo-list-flag,
+      .placeholder-mark,
+      .welcome-cover::before,
+      .app-dialog-close,
+      .back-to-top { corner-shape: round; }
     }
 
     @media (max-width: 900px) {
@@ -2552,7 +2763,7 @@
       .calculator-grid,
       .pantone-grid { grid-template-columns: 1fr; }
       .welcome-cover { padding: 28px; }
-      .mobile-result-jump { display: inline-flex; }
+      .mobile-result-jump { display: inline-flex; align-items: center; justify-content: center; }
     }
     @media (max-width: 780px) {
       .plain-number-grid { grid-template-columns: 1fr; }
@@ -2560,10 +2771,21 @@
       .welcome-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .form-actions,
       .advanced-actions,
-      .amount-actions { align-items: flex-start; flex-wrap: wrap; }
+      .amount-actions { align-items: center; flex-wrap: wrap; }
+      .form-actions > .mobile-result-jump,
+      .advanced-actions > .mobile-result-jump,
+      .amount-actions > .mobile-result-jump { margin-left: auto; }
       .form-actions > .footnote,
       .advanced-actions > .footnote,
       .amount-actions > .footnote { flex: 1 1 100%; }
+    }
+    /* Down to the 640px window minimum, keep the sticky header on one row so tools keep their height. */
+    @media (min-width: 561px) and (max-width: 820px) {
+      .app-header { gap: 12px; }
+      .brand { flex: 1 1 auto; min-width: 0; }
+      .brand > div { min-width: 0; }
+      .brand-caption { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .header-side { flex: 0 0 auto; flex-wrap: nowrap; }
     }
     @media (max-width: 560px) {
       .app { width: calc(100% - 24px); }
@@ -2617,9 +2839,9 @@
     <div class="app-chrome">
       <header class="app-header">
         <div class="brand">
-          <div class="brand-mark" aria-hidden="true"><img src="./trade-desk-logo.svg" alt=""></div>
+          <div class="brand-mark" aria-hidden="true"><img class="brand-logo" src="./trade-desk-logo.svg" alt=""><img class="brand-logo-dark" src="./trade-desk-logo-dark.svg" alt=""></div>
           <div>
-            <h1 class="brand-name">Trade Desk</h1>
+            <h1 class="brand-name">Cubic</h1>
             <p class="brand-caption">外贸实用工具 · notebook &amp; export helpers</p>
           </div>
         </div>
@@ -2644,6 +2866,7 @@
           <button class="tab" id="tab-world-clock" type="button" role="tab" aria-selected="false" aria-controls="view-world-clock" data-view="world-clock">世界时钟</button>
           <button class="tab" id="tab-memo" type="button" role="tab" aria-selected="false" aria-controls="view-memo" data-view="memo">备忘录</button>
         </div></div>
+        <div class="tab-lens-shadow" aria-hidden="true" hidden></div>
         <div class="tab-lens" aria-hidden="true" hidden></div>
       </nav>
     </div>
@@ -2654,7 +2877,7 @@
           <div class="welcome-cover">
             <div class="welcome-cover-main">
               <div class="welcome-cover-text">
-              <h2 class="welcome-title" id="welcome-title">Trade Desk</h2>
+              <h2 class="welcome-title" id="welcome-title">Cubic</h2>
               <p class="welcome-lede">外贸常用工具，一处完成。</p>
             </div>
             <div class="welcome-tiles">
@@ -2671,11 +2894,37 @@
           <aside class="home-ai-card" aria-labelledby="home-ai-title">
             <div class="home-ai-head">
               <h3 class="home-ai-title" id="home-ai-title">AI 观察</h3>
-              <span class="home-ai-day">今日</span>
+              <div class="home-ai-head-tools">
+                <span class="home-ai-day" id="home-ai-status" title="情报状态">准备中</span>
+                <button class="home-ai-refresh" type="button" id="home-ai-refresh" aria-label="立即检查更新" title="立即检查更新" hidden><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
+              </div>
+            </div>
+            <div class="home-ai-toolbar" id="home-ai-toolbar" hidden>
+              <div class="home-ai-chips" role="group" aria-label="按类别筛选">
+                <button class="home-ai-chip" type="button" data-ai-group="all" aria-pressed="true">全部</button>
+                <button class="home-ai-chip" type="button" data-ai-group="model" aria-pressed="false">模型</button>
+                <button class="home-ai-chip" type="button" data-ai-group="api" aria-pressed="false">API·价格</button>
+                <button class="home-ai-chip" type="button" data-ai-group="security" aria-pressed="false">安全</button>
+                <button class="home-ai-chip" type="button" data-ai-group="industry" aria-pressed="false">产业·政策</button>
+                <button class="home-ai-chip" type="button" data-ai-group="research" aria-pressed="false">研究·工具</button>
+                <button class="home-ai-chip" type="button" data-ai-group="other" aria-pressed="false">其他</button>
+              </div>
+              <div class="home-ai-view-options">
+                <select class="home-ai-select" id="home-ai-range" aria-label="时间范围">
+                  <option value="recent" selected>近期重点</option>
+                  <option value="7">近 7 天</option>
+                  <option value="30">近 30 天</option>
+                </select>
+                <select class="home-ai-select" id="home-ai-sort" aria-label="排序方式">
+                  <option value="priority" selected>优先级优先</option>
+                  <option value="newest">最新优先</option>
+                </select>
+              </div>
             </div>
             <div class="home-ai-events" id="home-ai-events" aria-live="polite">
               <div class="home-ai-empty">正在读取…</div>
             </div>
+            <button class="home-ai-more" type="button" id="home-ai-more" aria-controls="home-ai-events" aria-expanded="false" hidden>展开全部</button>
           </aside>
         </div>
       </section>
@@ -3207,16 +3456,6 @@
                 </div>
               </div>
 
-              <div class="amount-section">
-                <div class="section-heading"><h3>常用示例</h3><span class="section-meta">Quick examples</span></div>
-                <div class="amount-control-grid">
-                  <button class="btn" type="button" data-amount-example="1234.56">1,234.56</button>
-                  <button class="btn" type="button" data-amount-example="1000">1,000</button>
-                  <button class="btn" type="button" data-amount-example="0.05">0.05</button>
-                  <button class="btn" type="button" data-amount-example="-20.5">-20.50</button>
-                </div>
-              </div>
-
               <div class="amount-actions">
                 <span class="footnote">结果仅用于单据文字表达，请以合同币种和财务规则为准。</span>
                 <button class="btn mobile-result-jump" type="button" data-result-target=".amount-result-panel">查看结果</button>
@@ -3229,7 +3468,10 @@
             <div class="amount-result-head">
               <div class="result-head-row"><p class="result-label" id="amount-result-title">英文金额 · Amount in words</p><span class="result-state" id="amount-result-state">已转换</span></div>
               <div class="amount-result-hero" id="amount-primary" aria-live="polite">US DOLLARS TWELVE THOUSAND THREE HUNDRED FORTY-FIVE AND 67/100 ONLY</div>
-              <p class="amount-result-formula" id="amount-parsed">12,345.67 USD · 单据格式 · 美式英语</p>
+              <div class="amount-result-meta">
+                <p class="amount-result-formula" id="amount-parsed">12,345.67 USD · 单据格式 · 美式英语</p>
+                <div class="amount-copy"><span class="copy-status" id="amount-copy-status" aria-live="polite"></span><button class="btn btn-primary" type="button" id="amount-copy-btn">复制结果</button></div>
+              </div>
             </div>
             <div class="amount-result-body">
               <div class="stat-grid">
@@ -3245,8 +3487,6 @@
               </div>
 
               <p class="amount-state-note" id="amount-state-note">金额用途默认采用两位小数；JPY、KRW 等币种没有小数单位。</p>
-
-              <div class="copy-row"><span class="copy-status" id="amount-copy-status" aria-live="polite"></span><button class="btn btn-primary" type="button" id="amount-copy-btn">复制结果</button></div>
             </div>
           </section>
         </div>
@@ -3345,9 +3585,9 @@
               <div>
                 <p class="eyebrow">05 · Pantone</p>
                 <h2 class="panel-title" id="pantone-title">潘通查询</h2>
-                <p class="panel-subtitle">按色号或名称快速筛选 2,983 条公开参考色，点击色卡查看数值。</p>
+                <p class="panel-subtitle">按色号或名称快速筛选 <span data-pantone-total>3,283</span> 条公开参考色，点击色卡查看数值。</p>
               </div>
-              <span class="sample-tag">2,983 条参考</span>
+              <span class="sample-tag"><span data-pantone-total>3,283</span> 条参考</span>
             </div>
             <div class="pantone-body">
               <div class="pantone-toolbar">
@@ -3367,6 +3607,12 @@
 
               <div class="pantone-summary"><span class="pantone-count" id="pantone-count">显示 0 个色号</span><span class="pantone-summary-note">HEX / RGB / CMYK 为屏幕换算参考 · 公开 MIT 数据整理</span></div>
               <div class="pantone-results" id="pantone-results" aria-live="polite"></div>
+              <div class="pantone-pager">
+                <label class="pantone-page-size">每页
+                  <select id="pantone-page-size"><option value="12">12</option><option value="24" selected>24</option><option value="48">48</option></select>
+                </label>
+                <nav class="pantone-pages" id="pantone-pages" aria-label="潘通色号分页"></nav>
+              </div>
             </div>
           </section>
 
@@ -3599,14 +3845,14 @@
     </main>
 
     <footer class="app-footer">
-       <span>Trade Desk · 0.1.5-dev-0921</span>
+       <span>Cubic · 0.1.5-dev-0921</span>
       <span>© 2026 罗志杰。保留所有权利。</span>
     </footer>
   </div>
 
   <dialog class="app-dialog" id="close-choice-dialog" aria-labelledby="close-choice-title">
     <div class="app-dialog-body">
-      <h2 class="app-dialog-title" id="close-choice-title">关闭 Trade Desk？</h2>
+      <h2 class="app-dialog-title" id="close-choice-title">关闭 Cubic？</h2>
       <p class="app-dialog-copy">请选择关闭方式。最小化到托盘后，可从右下角托盘重新打开。</p>
       <p class="app-dialog-status" id="close-choice-status" role="status" aria-live="polite"></p>
       <div class="app-dialog-actions">
@@ -3640,6 +3886,8 @@
       </div>
     </div>
   </dialog>
+
+  <button class="back-to-top" type="button" id="back-to-top" aria-label="回到顶部" title="回到顶部"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg></button>
 
   <svg class="tab-lens-filters" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
  <filter id="tab-lens-refraction" filterUnits="userSpaceOnUse" primitiveUnits="userSpaceOnUse" x="0" y="0" width="140" height="72" color-interpolation-filters="sRGB">
@@ -4834,13 +5082,6 @@
         const element = document.getElementById(id);
         element.addEventListener(element.tagName === 'SELECT' ? 'change' : 'input', calculateAmount);
       });
-      document.querySelectorAll('[data-amount-example]').forEach((button) => {
-        button.addEventListener('click', () => {
-          document.getElementById('amount-value').value = button.dataset.amountExample;
-          calculateAmount();
-          document.getElementById('amount-value').focus();
-        });
-      });
       document.getElementById('amount-clear-btn').addEventListener('click', () => {
         document.getElementById('amount-form').reset();
         amountOutput.copyStatus.textContent = '';
@@ -4926,7 +5167,9 @@
         U: 'Pantone Solid Uncoated · U',
         MC: 'Pantone Metallic · C'
       };
-      const pantoneDisplayLimit = 120;
+      const pantonePageSizeElement = document.getElementById('pantone-page-size');
+      const pantonePagesElement = document.getElementById('pantone-pages');
+      const pantonePageSizeKey = 'tradeDesk.pantonePageSize';
       const pantoneSearchElement = document.getElementById('pantone-search');
       const pantoneSeriesElement = document.getElementById('pantone-series');
       const pantoneResultsElement = document.getElementById('pantone-results');
@@ -5019,26 +5262,75 @@
         pantoneCopyHexButton.disabled = !hasItem;
       };
 
-      const renderPantoneResults = () => {
-        const matches = getPantoneMatches();
-        const visibleMatches = matches.slice(0, pantoneDisplayLimit);
-        pantoneResultsElement.innerHTML = '';
-        pantoneCountElement.textContent = matches.length > pantoneDisplayLimit
-          ? `匹配 ${matches.length} 个 · 显示前 ${pantoneDisplayLimit} 个，请继续输入缩小范围`
-          : matches.length ? `显示 ${matches.length} 个色号` : '未找到匹配色号';
-        if (!matches.length) {
-          const empty = document.createElement('div');
-          empty.className = 'pantone-empty';
-          empty.textContent = '换个色号、英文名称，或切换色卡系列试试。';
-          pantoneResultsElement.appendChild(empty);
-          selectedPantone = null;
-          renderPantoneDetail(null);
-          return;
-        }
-        if (!selectedPantone || !matches.some((item) => samePantone(item, selectedPantone))) selectedPantone = matches[0];
-        visibleMatches.forEach((item) => {
+      let pantoneMatches = [];
+      let pantonePage = 1;
+      let pantoneSelectedCard = null;
+      try {
+        const savedSize = localStorage.getItem(pantonePageSizeKey);
+        if (['12', '24', '48'].includes(savedSize)) pantonePageSizeElement.value = savedSize;
+      } catch (_) {}
+      document.querySelectorAll('[data-pantone-total]').forEach((element) => { element.textContent = pantonePalette.length.toLocaleString('en-US'); });
+
+      const pantonePageSize = () => Number(pantonePageSizeElement.value) || 24;
+      const pantonePageCount = () => Math.max(1, Math.ceil(pantoneMatches.length / pantonePageSize()));
+
+      const selectPantoneCard = (card, item) => {
+        selectedPantone = item;
+        pantoneCopyStatus.textContent = '';
+        if (pantoneSelectedCard) pantoneSelectedCard.classList.remove('is-selected');
+        card.classList.add('is-selected');
+        pantoneSelectedCard = card;
+        renderPantoneDetail(item);
+      };
+
+      // Page list keeps first, last and the pages around the current one; gaps collapse to an ellipsis.
+      const pantonePageList = (current, last) => {
+        const pages = new Set([1, last, current - 1, current, current + 1]);
+        if (current <= 3) [2, 3, 4].forEach((page) => pages.add(page));
+        if (current >= last - 2) [last - 1, last - 2, last - 3].forEach((page) => pages.add(page));
+        const sorted = [...pages].filter((page) => page >= 1 && page <= last).sort((x, y) => x - y);
+        return sorted.flatMap((page, index) => (index && page - sorted[index - 1] > 1 ? ['gap', page] : [page]));
+      };
+
+      const renderPantonePager = () => {
+        const last = pantonePageCount();
+        pantonePagesElement.innerHTML = '';
+        pantonePagesElement.hidden = pantoneMatches.length <= pantonePageSize();
+        const pageButton = (label, page, ariaLabel) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'pantone-page-btn';
+          button.textContent = label;
+          if (ariaLabel) button.setAttribute('aria-label', ariaLabel);
+          if (page === pantonePage && label === String(page)) button.setAttribute('aria-current', 'page');
+          button.disabled = page < 1 || page > last;
+          button.addEventListener('click', () => goToPantonePage(page, true));
+          return button;
+        };
+        pantonePagesElement.appendChild(pageButton('‹', pantonePage - 1, '上一页'));
+        pantonePageList(pantonePage, last).forEach((page) => {
+          if (page === 'gap') {
+            const gap = document.createElement('span');
+            gap.className = 'pantone-page-gap';
+            gap.textContent = '…';
+            pantonePagesElement.appendChild(gap);
+          } else {
+            pantonePagesElement.appendChild(pageButton(String(page), page, `第 ${page} 页`));
+          }
+        });
+        pantonePagesElement.appendChild(pageButton('›', pantonePage + 1, '下一页'));
+      };
+
+      const renderPantonePage = () => {
+        const size = pantonePageSize();
+        const start = (pantonePage - 1) * size;
+        const fragment = document.createDocumentFragment();
+        pantoneSelectedCard = null;
+        pantoneMatches.slice(start, start + size).forEach((item) => {
           const card = document.createElement('button');
-          card.className = `pantone-card${samePantone(selectedPantone, item) ? ' is-selected' : ''}`;
+          const isSelected = samePantone(selectedPantone, item);
+          card.className = `pantone-card${isSelected ? ' is-selected' : ''}`;
+          if (isSelected) pantoneSelectedCard = card;
           card.type = 'button';
           card.style.setProperty('--swatch', item.hex);
           const swatch = document.createElement('span');
@@ -5053,13 +5345,47 @@
           series.className = 'pantone-card-series';
           series.textContent = pantoneSeriesLabel[item.series];
           card.append(swatch, code, name, series);
-          card.addEventListener('click', () => {
-            selectedPantone = item;
-            pantoneCopyStatus.textContent = '';
-            renderPantoneResults();
-          });
-          pantoneResultsElement.appendChild(card);
+          card.addEventListener('click', () => selectPantoneCard(card, item));
+          fragment.appendChild(card);
         });
+        pantoneResultsElement.innerHTML = '';
+        pantoneResultsElement.appendChild(fragment);
+        pantoneResultsElement.scrollTop = 0;
+        const total = pantoneMatches.length;
+        pantoneCountElement.textContent = total > size
+          ? `共 ${total} 个色号 · 第 ${pantonePage} / ${pantonePageCount()} 页`
+          : `显示 ${total} 个色号`;
+        renderPantonePager();
+      };
+
+      const goToPantonePage = (page, fromPager) => {
+        pantonePage = Math.min(Math.max(1, page), pantonePageCount());
+        renderPantonePage();
+        if (!fromPager) return;
+        const top = pantoneResultsElement.getBoundingClientRect().top;
+        const chrome = document.querySelector('.app-chrome');
+        const offset = (chrome ? chrome.getBoundingClientRect().bottom : 0) + 12;
+        if (top < offset) window.scrollBy({ top: top - offset - 40, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      };
+
+      const renderPantoneResults = () => {
+        const matches = getPantoneMatches();
+        pantoneMatches = matches;
+        pantonePage = 1;
+        if (!matches.length) {
+          pantoneResultsElement.innerHTML = '';
+          const empty = document.createElement('div');
+          empty.className = 'pantone-empty';
+          empty.textContent = '换个色号、英文名称，或切换色卡系列试试。';
+          pantoneResultsElement.appendChild(empty);
+          pantoneCountElement.textContent = '未找到匹配色号';
+          pantonePagesElement.hidden = true;
+          selectedPantone = null;
+          renderPantoneDetail(null);
+          return;
+        }
+        if (!selectedPantone || !matches.some((item) => samePantone(item, selectedPantone))) selectedPantone = matches[0];
+        renderPantonePage();
         renderPantoneDetail(selectedPantone);
       };
 
@@ -5077,6 +5403,13 @@
 
       pantoneSearchElement.addEventListener('input', renderPantoneResults);
       pantoneSeriesElement.addEventListener('change', renderPantoneResults);
+      pantonePageSizeElement.addEventListener('change', () => {
+        try { localStorage.setItem(pantonePageSizeKey, pantonePageSizeElement.value); } catch (_) {}
+        const first = (pantonePage - 1) * Number(pantonePageSizeElement.dataset.previous || 24);
+        pantonePageSizeElement.dataset.previous = pantonePageSizeElement.value;
+        goToPantonePage(Math.floor(first / pantonePageSize()) + 1, false);
+      });
+      pantonePageSizeElement.dataset.previous = pantonePageSizeElement.value;
       document.getElementById('pantone-clear-btn').addEventListener('click', () => {
         pantoneSearchElement.value = '';
         pantoneSeriesElement.value = 'all';
@@ -5970,7 +6303,7 @@
       const exportMemos = async () => {
         const saved = flushMemoSave();
         const payload = {
-          app: 'Trade Desk',
+          app: 'Cubic',
           schemaVersion: 2,
           exportedAt: memoNow(),
           notes: memoState.notes.map((note) => ({ ...note, tags: [...note.tags] }))
@@ -5980,7 +6313,7 @@
           const url = URL.createObjectURL(new Blob([json], { type: 'application/json;charset=utf-8' }));
           const link = document.createElement('a');
           link.href = url;
-          link.download = `trade-desk-memos-${memoDateKey()}.json`;
+          link.download = `cubic-memos-${memoDateKey()}.json`;
           link.rel = 'noopener';
           document.body.appendChild(link);
           link.click();
@@ -6193,28 +6526,278 @@
       console.assert(JSON.stringify(memoState) === memoImportStateBeforeCheck, 'Memo invalid import self-check failed');
 
       const homeAiEvents = document.getElementById('home-ai-events');
-      const aiFeedState = { feed: null, loading: true, error: false };
+      const homeAiStatus = document.getElementById('home-ai-status');
+      const homeAiRefresh = document.getElementById('home-ai-refresh');
+      const aiFeedCanRefresh = () => Boolean(window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function');
+      const aiFeedState = { feed: null, status: null, loading: true, error: false };
       const aiFeedPriorityOrder = { P0: 0, P1: 1, P2: 2, P3: 3 };
 
       const aiFeedText = (value) => value == null ? '' : String(value);
       const aiFeedPriority = (value) => Object.prototype.hasOwnProperty.call(aiFeedPriorityOrder, aiFeedText(value)) ? aiFeedText(value) : 'P3';
       const aiFeedDate = (value) => {
         if (typeof value !== 'string' || !value.trim()) return null;
-        const date = new Date(value);
+        const text = value.trim();
+        // A timestamp without a zone is UTC, as the worker reads it; Date would take it as local time.
+        const zoneless = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(text);
+        const date = new Date(zoneless ? text.replace(' ', 'T') + 'Z' : text);
         return Number.isNaN(date.getTime()) ? null : date;
       };
-      const aiFeedIsToday = (date, now = new Date()) => date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
-      const aiFeedTime = (date) => String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
-      const aiFeedTodayEvents = () => {
-        const now = new Date();
-        const events = aiFeedState.feed && Array.isArray(aiFeedState.feed.events) ? aiFeedState.feed.events : [];
-        return events
-          .filter((event) => event && typeof event === 'object')
-          .map((event) => ({ event, date: aiFeedDate(event.discovered_at) }))
-          .filter((item) => item.date && aiFeedIsToday(item.date, now))
-          .sort((left, right) => right.date.getTime() - left.date.getTime() || aiFeedPriorityOrder[aiFeedPriority(left.event.priority)] - aiFeedPriorityOrder[aiFeedPriority(right.event.priority)])
-          .slice(0, 3);
+      const aiFeedWindowDays = { P0: 7, P1: 7, P2: 3, P3: 3 };
+      const aiFeedTypeLabels = {
+        release: '发布', api: 'API', pricing: '价格', deprecation: '弃用', reset: '额度', security: '安全与状态',
+        open_weights: '开放权重', cloud_availability: '云平台', benchmark: '评测', industry: '产业',
+        policy: '政策', compute: '算力', tool: '工具', research: '研究', content_change: '更新'
       };
+      const aiFeedDayNumber = (year, monthIndex, day) => Math.floor(Date.UTC(year, monthIndex, day) / 86400000);
+      // The calendar day of a moment in the machine's zone; offsetMinutes stands in for it in the shared fixture check.
+      const aiFeedLocalDay = (date, offsetMinutes) => {
+        if (Number.isFinite(offsetMinutes)) {
+          const shifted = new Date(date.getTime() + offsetMinutes * 60000);
+          return aiFeedDayNumber(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate());
+        }
+        return aiFeedDayNumber(date.getFullYear(), date.getMonth(), date.getDate());
+      };
+      const aiFeedEventDay = (event, offsetMinutes) => {
+        const published = aiFeedDate(event.published_at);
+        if (published) return aiFeedDayNumber(published.getUTCFullYear(), published.getUTCMonth(), published.getUTCDate());
+        const discovered = aiFeedDate(event.discovered_at);
+        return discovered ? aiFeedLocalDay(discovered, offsetMinutes) : null;
+      };
+      const aiFeedNormalize = (value) => aiFeedText(value).toLowerCase().replace(/[^\p{L}\p{N}_]+/gu, ' ').trim();
+      // True when a summary adds nothing to its headline; the worker applies the same test (repeats_title).
+      const aiFeedRepeatsTitle = (summary, title) => {
+        const key = aiFeedNormalize(summary);
+        const head = aiFeedNormalize(title);
+        if (!key) return true;
+        const size = (value) => Array.from(value).length;
+        return Boolean(head) && (key === head || head.includes(key) || (key.includes(head) && size(key) <= size(head) + 12));
+      };
+      const aiFeedTypeGroups = {
+        release: 'model', open_weights: 'model',
+        api: 'api', pricing: 'api', deprecation: 'api', reset: 'api', cloud_availability: 'api',
+        security: 'security',
+        industry: 'industry', policy: 'industry', compute: 'industry',
+        research: 'research', tool: 'research', benchmark: 'research'
+      };
+      const aiFeedGroup = (event) => aiFeedTypeGroups[aiFeedText(event && event.event_type)] || 'other';
+      const aiFeedCompareKeys = (left, right) => {
+        const a = aiFeedText(left.event.key);
+        const b = aiFeedText(right.event.key);
+        return a < b ? -1 : a > b ? 1 : 0;
+      };
+      // Priority first: the order the worker uses for the home card (importance_key); within a priority, the newer day first.
+      const aiFeedByPriority = (left, right) => left.rank - right.rank
+        || left.age - right.age
+        || right.confidence - left.confidence
+        || right.discovered - left.discovered
+        || aiFeedCompareKeys(left, right);
+      // Newest first by the news date: publication date when the source gave one (a date alone counts as the start of that
+      // day), else when it was first discovered.
+      // Upcoming dates count as today, as they do for the windows; the event key keeps equal items in a fixed order.
+      const aiFeedByNewest = (left, right) => left.age - right.age
+        || right.moment - left.moment
+        || left.rank - right.rank
+        || right.discovered - left.discovered
+        || aiFeedCompareKeys(left, right);
+      // view.days: one window for every priority; unset keeps the per-priority home windows.
+      // view.group: only events of that category group ('all' or unset for every group).
+      // view.sort: 'priority' (default) or 'newest'. Repeated titles collapse to their most important copy either way,
+      // so the sort only changes the order, never which items are shown.
+      const aiFeedDisplayEvents = (events, now = new Date(), limit = 3, offsetMinutes, view = {}) => {
+        const today = aiFeedLocalDay(now, offsetMinutes);
+        const days = Number.isFinite(view.days) ? view.days : null;
+        const group = view.group && view.group !== 'all' ? view.group : '';
+        const ranked = events
+          .filter((event) => event && typeof event === 'object' && (!group || aiFeedGroup(event) === group))
+          .map((event) => {
+            const day = aiFeedEventDay(event, offsetMinutes);
+            const published = aiFeedDate(event.published_at);
+            const discovered = aiFeedDate(event.discovered_at);
+            return {
+              event,
+              rank: aiFeedPriorityOrder[aiFeedPriority(event.priority)],
+              age: day === null ? Infinity : Math.max(0, today - day),
+              confidence: Number(event.confidence) || 0,
+              discovered: discovered ? discovered.getTime() : 0,
+              moment: published ? Math.min(published.getTime(), now.getTime()) : discovered ? discovered.getTime() : 0
+            };
+          })
+          .filter((item) => item.age <= (days === null ? aiFeedWindowDays[aiFeedPriority(item.event.priority)] : days))
+          .sort(aiFeedByPriority);
+        const seen = new Set();
+        const unique = [];
+        for (const item of ranked) {
+          const key = aiFeedNormalize(item.event.title) || aiFeedText(item.event.key);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          unique.push(item);
+        }
+        if (view.sort === 'newest') unique.sort(aiFeedByNewest);
+        return unique.slice(0, limit).map((item) => item.event);
+      };
+      const aiFeedDayLabel = (event, now = new Date(), offsetMinutes) => {
+        const day = aiFeedEventDay(event, offsetMinutes);
+        if (day === null) return '';
+        const diff = aiFeedLocalDay(now, offsetMinutes) - day;
+        if (diff === 0) return '今天';
+        if (diff === 1) return '昨天';
+        if (diff > 1 && diff < 7) return diff + ' 天前';
+        const date = new Date(day * 86400000);
+        return (date.getUTCMonth() + 1) + '月' + date.getUTCDate() + '日' + (diff < 0 ? '生效' : '');
+      };
+      const aiFeedEvidenceAfterTitle = (evidence, title) => {
+        const head = aiFeedText(title).replace(/…+$/, '').trim();
+        if (head && evidence.startsWith(head)) {
+          const rest = evidence.slice(head.length).replace(/^[\s.:;–—-]+/, '');
+          if (rest) return rest;
+        }
+        return evidence;
+      };
+      const aiFeedSummaryText = (event) => {
+        const evidence = aiFeedText(event.evidence);
+        const summary = aiFeedText(event.summary);
+        const trusted = (event.summary_mode === 'extractive-v1' || event.summary_mode === 'rule-v1') && summary && evidence.includes(summary);
+        const text = trusted ? summary : aiFeedEvidenceAfterTitle(evidence, event.title).slice(0, 180);
+        return aiFeedRepeatsTitle(text, event.title) ? '' : text;
+      };
+      const aiFeedStatusText = (status) => {
+        if (!status || typeof status !== 'object') return '近期';
+        const state = aiFeedText(status.state);
+        const labels = {
+          preparing: '准备本地组件', updating: '更新中', updated: '已更新',
+          no_new_items: '今日暂无新增', partial: '部分未完成', failed: '更新失败',
+          interrupted: '恢复上次更新', unsupported: '更新不可用'
+        };
+        const label = labels[state] || '近期';
+        const lastSuccess = aiFeedDate(status.last_success_at);
+        // Updates run once a day (from the cycle's start): a day plus a morning's slack before data counts as old.
+        const stale = lastSuccess && Date.now() - lastSuccess.getTime() > 36 * 3600000;
+        if (stale && state === 'updating') return '更新中 · 旧数据';
+        if (stale && state === 'failed') return '失败 · 过期';
+        if (stale && state === 'partial') return '部分失败 · 过期';
+        if (stale && state === 'interrupted') return '中断 · 过期';
+        if (stale) return '数据过期';
+        if (state === 'partial') {
+          const missing = Number(status.failed_sources || 0) + Number(status.pending_sources || 0);
+          const head = Number(status.new_items) > 0 ? '更新 +' + Number(status.new_items) : '已检查';
+          return missing > 0 ? head + ' · ' + missing + ' 个来源未响应' : label;
+        }
+        if (state === 'updated' && Number(status.new_items) > 0) return '更新 +' + Number(status.new_items);
+        return label;
+      };
+      const aiFeedStatusTitle = (status) => {
+        if (!status || typeof status !== 'object') return '情报状态';
+        const lastSuccess = aiFeedDate(status.last_success_at);
+        const details = [];
+        if (aiFeedText(status.message)) details.push(aiFeedText(status.message));
+        if (lastSuccess) details.push('最近成功检查：' + lastSuccess.toLocaleString());
+        if (Number(status.failed_sources) > 0) {
+          const kinds = status.failure_kinds && typeof status.failure_kinds === 'object'
+            ? Object.entries(status.failure_kinds).filter(([, count]) => Number(count) > 0).map(([kind, count]) => aiFeedText(kind) + ' ' + Number(count)).join('、')
+            : '';
+          details.push('失败来源：' + Number(status.failed_sources) + (kinds ? '（' + kinds + '）' : ''));
+        }
+        if (Number(status.pending_sources) > 0) details.push('待检查来源：' + Number(status.pending_sources));
+        if (status.model_state === 'unavailable') details.push('本地模型暂不可用，摘要使用规则摘录' + (aiFeedText(status.model_error) ? '（' + aiFeedText(status.model_error) + '）' : ''));
+        return details.join('；') || '情报状态';
+      };
+      const aiFeedFailureSummary = (status) => {
+        if (!status || typeof status !== 'object' || !(Number(status.failed_sources) > 0)) return '';
+        const kinds = status.failure_kinds && typeof status.failure_kinds === 'object'
+          ? Object.entries(status.failure_kinds).filter(([, count]) => Number(count) > 0).map(([kind, count]) => aiFeedText(kind) + ' ' + Number(count)).join('、')
+          : '';
+        return Number(status.failed_sources) + ' 个来源未响应' + (kinds ? '：' + kinds : '') + (aiFeedBusy(status) ? '' : '。可点右上角刷新重试，或检查网络与代理。');
+      };
+      const aiFeedBusy = (status) => ['preparing', 'updating'].includes(aiFeedText(status && status.state));
+      const aiFeedCompactLimit = 3;
+      const aiFeedViewKey = 'tradeDesk.aiWatchView';
+      const aiFeedViewChoices = {
+        group: ['all', 'model', 'api', 'security', 'industry', 'research', 'other'],
+        range: ['recent', '7', '30'],
+        sort: ['priority', 'newest']
+      };
+      // Saved view preferences; a missing or unknown value (e.g. no sort, saved before sorting existed) takes the default.
+      const aiFeedReadView = (raw) => {
+        const view = { group: 'all', range: 'recent', sort: 'priority', expanded: false };
+        try {
+          const stored = JSON.parse(raw || '{}');
+          if (stored && typeof stored === 'object') {
+            for (const name of ['group', 'range', 'sort']) if (aiFeedViewChoices[name].includes(stored[name])) view[name] = stored[name];
+            view.expanded = stored.expanded === true;
+          }
+        } catch (_) {}
+        return view;
+      };
+      let aiFeedStoredView = '';
+      try { aiFeedStoredView = localStorage.getItem(aiFeedViewKey) || ''; } catch (_) {}
+      const aiFeedView = aiFeedReadView(aiFeedStoredView);
+      const saveAiFeedView = () => {
+        try { localStorage.setItem(aiFeedViewKey, JSON.stringify(aiFeedView)); } catch (_) {}
+      };
+      const aiFeedRangeDays = () => aiFeedView.range === 'recent' ? undefined : Number(aiFeedView.range);
+      const aiFeedAllEvents = () => aiFeedState.feed && Array.isArray(aiFeedState.feed.events) ? aiFeedState.feed.events : [];
+      // Every event the chosen range and category allow, in the chosen order; the card shows the first three unless expanded.
+      const aiFeedMatchingEvents = () => aiFeedDisplayEvents(aiFeedAllEvents(), new Date(), Infinity, undefined, { days: aiFeedRangeDays(), group: aiFeedView.group, sort: aiFeedView.sort });
+      const homeAiToolbar = document.getElementById('home-ai-toolbar');
+      const homeAiRange = document.getElementById('home-ai-range');
+      const homeAiSort = document.getElementById('home-ai-sort');
+      const homeAiMore = document.getElementById('home-ai-more');
+      const homeAiChips = homeAiToolbar ? Array.from(homeAiToolbar.querySelectorAll('[data-ai-group]')) : [];
+      const homeAiChipNames = Object.fromEntries(homeAiChips.map((chip) => [chip.dataset.aiGroup, chip.textContent]));
+      // Controls are updated in place, never rebuilt, so the minute poll keeps keyboard focus where it was.
+      const renderHomeAiControls = (showing, total) => {
+        if (!homeAiToolbar) return;
+        const hasFeed = Boolean(aiFeedState.feed) && !aiFeedState.error && aiFeedAllEvents().length > 0;
+        homeAiToolbar.hidden = !hasFeed;
+        if (homeAiRange) homeAiRange.value = aiFeedView.range;
+        if (homeAiSort) homeAiSort.value = aiFeedView.sort;
+        const counts = {};
+        aiFeedDisplayEvents(aiFeedAllEvents(), new Date(), Infinity, undefined, { days: aiFeedRangeDays() })
+          .forEach((event) => { const group = aiFeedGroup(event); counts[group] = (counts[group] || 0) + 1; counts.all = (counts.all || 0) + 1; });
+        homeAiChips.forEach((chip) => {
+          const group = chip.dataset.aiGroup;
+          const count = counts[group] || 0;
+          const active = aiFeedView.group === group;
+          chip.hidden = group !== 'all' && !count && !active;
+          chip.setAttribute('aria-pressed', active ? 'true' : 'false');
+          const text = homeAiChipNames[group] + (count ? ' ' + count : '');
+          if (chip.textContent !== text) chip.textContent = text;
+        });
+        if (homeAiMore) {
+          homeAiMore.hidden = !hasFeed || total <= aiFeedCompactLimit;
+          homeAiMore.setAttribute('aria-expanded', aiFeedView.expanded ? 'true' : 'false');
+          const text = aiFeedView.expanded ? '收起' : '展开全部 ' + total + ' 条（还有 ' + (total - showing) + ' 条）';
+          if (homeAiMore.textContent !== text) homeAiMore.textContent = text;
+        }
+        homeAiEvents.classList.toggle('is-expanded', aiFeedView.expanded && total > aiFeedCompactLimit);
+      };
+      homeAiChips.forEach((chip) => chip.addEventListener('click', () => {
+        aiFeedView.group = chip.dataset.aiGroup;
+        saveAiFeedView();
+        renderHomeAi();
+      }));
+      if (homeAiRange) {
+        homeAiRange.addEventListener('change', () => {
+          aiFeedView.range = aiFeedViewChoices.range.includes(homeAiRange.value) ? homeAiRange.value : 'recent';
+          saveAiFeedView();
+          renderHomeAi();
+        });
+      }
+      if (homeAiSort) {
+        homeAiSort.addEventListener('change', () => {
+          aiFeedView.sort = aiFeedViewChoices.sort.includes(homeAiSort.value) ? homeAiSort.value : 'priority';
+          saveAiFeedView();
+          renderHomeAi();
+        });
+      }
+      if (homeAiMore) {
+        homeAiMore.addEventListener('click', () => {
+          aiFeedView.expanded = !aiFeedView.expanded;
+          saveAiFeedView();
+          renderHomeAi();
+          if (!aiFeedView.expanded) homeAiEvents.scrollTop = 0;
+        });
+      }
       const safeAiUrl = (value) => {
         try {
           const raw = aiFeedText(value).trim();
@@ -6225,29 +6808,81 @@
           return '';
         }
       };
-      const renderHomeAi = () => {
+      // The card is built off-screen and swapped in only when it differs, so the 5 s poll that follows an
+      // update neither drops keyboard focus from a link nor makes the live region read the card again.
+      const commitHomeAi = (next) => {
+        if (next.innerHTML === homeAiEvents.innerHTML) return;
         while (homeAiEvents.firstChild) homeAiEvents.removeChild(homeAiEvents.firstChild);
+        while (next.firstChild) homeAiEvents.appendChild(next.firstChild);
+      };
+      const renderHomeAi = () => {
+        const next = document.createElement('div');
+        if (homeAiStatus) {
+          homeAiStatus.textContent = aiFeedStatusText(aiFeedState.status);
+          homeAiStatus.title = aiFeedStatusTitle(aiFeedState.status);
+        }
+        if (homeAiRefresh) {
+          const busy = aiFeedBusy(aiFeedState.status);
+          homeAiRefresh.hidden = !aiFeedCanRefresh() || aiFeedText(aiFeedState.status && aiFeedState.status.state) === 'unsupported';
+          // aria-disabled, not disabled: a disabled button would drop the focus of a keyboard user who just pressed it.
+          homeAiRefresh.setAttribute('aria-disabled', busy ? 'true' : 'false');
+          homeAiRefresh.classList.toggle('is-busy', busy);
+          homeAiRefresh.setAttribute('aria-busy', busy ? 'true' : 'false');
+        }
         if (aiFeedState.loading && !aiFeedState.feed) {
-          homeAiEvents.innerHTML = '<div class="home-ai-empty">正在读取…</div>';
+          renderHomeAiControls(0, 0);
+          next.innerHTML = '<div class="home-ai-empty">正在读取…</div>';
+          commitHomeAi(next);
           return;
         }
         if (aiFeedState.error) {
+          renderHomeAiControls(0, 0);
           const empty = document.createElement('div');
           empty.className = 'home-ai-empty is-error';
           empty.textContent = 'AI 情报暂不可用';
-          homeAiEvents.appendChild(empty);
+          next.appendChild(empty);
+          commitHomeAi(next);
           return;
         }
-        const events = aiFeedTodayEvents();
-        if (!events.length) {
+        const matching = aiFeedMatchingEvents();
+        const events = aiFeedView.expanded ? matching : matching.slice(0, aiFeedCompactLimit);
+        renderHomeAiControls(events.length, matching.length);
+        const filtered = aiFeedView.group !== 'all' || aiFeedView.range !== 'recent';
+        if (!events.length && filtered && aiFeedAllEvents().length) {
           const empty = document.createElement('div');
           empty.className = 'home-ai-empty';
-          empty.textContent = '今天暂无新情报';
-          homeAiEvents.appendChild(empty);
+          empty.textContent = '此范围内暂无' + (aiFeedView.group === 'all' ? '' : homeAiChipNames[aiFeedView.group] + '类') + '情报';
+          next.appendChild(empty);
+          commitHomeAi(next);
           return;
         }
+        if (!events.length) {
+          const empty = document.createElement('div');
+          const state = aiFeedText(aiFeedState.status && aiFeedState.status.state);
+          empty.className = 'home-ai-empty' + (state === 'failed' ? ' is-error' : '');
+          empty.textContent = state === 'failed'
+            ? '更新失败，已保留最近成功数据'
+            : state === 'partial'
+              ? '近期暂无重要情报；部分来源未能检查'
+              : state === 'updating' || state === 'preparing'
+                ? '正在准备或更新本地情报'
+                : state === 'no_new_items'
+                  ? '检查完成，近期暂无重要情报'
+                  : '近期暂无可展示的情报';
+          next.appendChild(empty);
+          const detail = aiFeedFailureSummary(aiFeedState.status);
+          if (detail) {
+            const hint = document.createElement('div');
+            hint.className = 'home-ai-empty-detail';
+            hint.textContent = detail;
+            next.appendChild(hint);
+          }
+          commitHomeAi(next);
+          return;
+        }
+        const now = new Date();
         const fragment = document.createDocumentFragment();
-        events.forEach(({ event, date }) => {
+        events.forEach((event) => {
           const article = document.createElement('article');
           article.className = 'home-ai-item';
           const head = document.createElement('div');
@@ -6276,16 +6911,38 @@
           meta.className = 'home-ai-item-meta';
           const source = document.createElement('span');
           source.className = 'home-ai-source';
-          source.textContent = aiFeedText(event.provider || event.source_name || event.source_id) || '未知来源';
+          const typeLabel = aiFeedTypeLabels[aiFeedText(event.event_type)] || '';
+          source.textContent = (aiFeedText(event.provider || event.source_name || event.source_id) || '未知来源') + (typeLabel ? ' · ' + typeLabel : '');
           const time = document.createElement('time');
           time.className = 'home-ai-time';
-          time.dateTime = event.discovered_at;
-          time.textContent = aiFeedTime(date);
+          const published = aiFeedDate(event.published_at);
+          time.dateTime = published ? published.toISOString().slice(0, 10) : aiFeedText(event.discovered_at);
+          time.textContent = aiFeedDayLabel(event, now);
           meta.append(source, time);
           article.appendChild(meta);
+          const summary = aiFeedSummaryText(event);
+          if (summary) {
+            const excerpt = document.createElement('p');
+            excerpt.className = 'home-ai-summary';
+            excerpt.textContent = summary;
+            article.appendChild(excerpt);
+          }
+          if (aiFeedText(event.summary_note)) {
+            const note = document.createElement('div');
+            note.className = 'home-ai-summary-note';
+            note.textContent = aiFeedText(event.summary_note);
+            article.appendChild(note);
+          }
           fragment.appendChild(article);
         });
-        homeAiEvents.appendChild(fragment);
+        next.appendChild(fragment);
+        commitHomeAi(next);
+      };
+      let aiFeedFastTimer = 0;
+      const aiFeedFollowUp = () => {
+        if (aiFeedBusy(aiFeedState.status) && !aiFeedFastTimer) {
+          aiFeedFastTimer = window.setTimeout(() => { aiFeedFastTimer = 0; loadAiFeed(); }, 5000);
+        }
       };
       const loadAiFeed = async () => {
         aiFeedState.loading = true;
@@ -6294,6 +6951,12 @@
           let raw;
           const invoke = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
           if (typeof invoke === 'function') {
+            try {
+              const statusRaw = await invoke('read_ai_status');
+              aiFeedState.status = typeof statusRaw === 'string' ? JSON.parse(statusRaw) : statusRaw;
+            } catch (statusError) {
+              aiFeedState.status = null;
+            }
             raw = await window.__TAURI__.core.invoke('read_ai_feed');
           } else {
             const response = await fetch('./ai-intelligence.json', { cache: 'no-store' });
@@ -6306,13 +6969,30 @@
           aiFeedState.loading = false;
           aiFeedState.error = false;
           renderHomeAi();
+          aiFeedFollowUp();
         } catch (error) {
-          aiFeedState.feed = null;
+          const preparing = ['preparing', 'updating'].includes(aiFeedText(aiFeedState.status && aiFeedState.status.state));
+          const missingInitialFeed = aiFeedText(error && (error.message || error)).includes('本机 AI 情报不可用');
+          aiFeedState.feed = preparing && missingInitialFeed ? { version: 1, events: [] } : null;
           aiFeedState.loading = false;
-          aiFeedState.error = true;
+          aiFeedState.error = !aiFeedState.feed;
           renderHomeAi();
+          aiFeedFollowUp();
         }
       };
+      if (homeAiRefresh) {
+        homeAiRefresh.addEventListener('click', async () => {
+          if (!aiFeedCanRefresh() || homeAiRefresh.getAttribute('aria-disabled') === 'true') return;
+          homeAiRefresh.setAttribute('aria-disabled', 'true');
+          homeAiRefresh.classList.add('is-busy');
+          try {
+            await window.__TAURI__.core.invoke('refresh_ai_news');
+          } catch (error) {
+            // The status line reports problems; a failed request only makes the button usable again.
+          }
+          window.setTimeout(loadAiFeed, 1500);
+        });
+      }
       loadAiFeed();
       window.setInterval(loadAiFeed, 60000);
 
@@ -6400,73 +7080,311 @@
       if (supportsViewTransitions) document.documentElement.classList.add('has-view-transitions');
 
       const tabLens = (() => {
-        const tabs=tabButtons,track=tabsRail,viewport=document.querySelector('.tabs-viewport'),lens=document.querySelector('.tab-lens'),nav=lens.parentElement;
-        const displacement=document.querySelector('#tab-lens-displacement'),mapImage=document.querySelector('#tab-lens-map'),reduce=reducedMotion;
- let selected=activeTabIndex,preview=activeTabIndex,drag=null,raf=0,lastTime=0,lastMapRatio=0,suppressClick=false;
- let state={x:0,w:100,h:48},velocity={x:0,w:0,h:0},target={...state},strength=0;
- const bounds=()=>{const left=track.getBoundingClientRect().left;return tabs.map(b=>{const r=b.getBoundingClientRect();return{x:r.left-left,w:r.width}})};
- const nearest=(x)=>{const b=bounds();return b.reduce((best,r,i)=>Math.abs(r.x+r.w/2-x)<Math.abs(b[best].x+b[best].w/2-x)?i:best,0)};
- function paintPreview(i){preview=i;tabs.forEach((b,j)=>b.classList.toggle('is-preview',j===i));}
- function commit(i,focus=false){selected=i;paintPreview(i);activateView(tabs[i],i);if(focus)tabs[i].focus();}
- function makeMap(w,h){
-  const ratio=w/h;if(Math.abs(ratio-lastMapRatio)<.08)return;lastMapRatio=ratio;
-  const canvas=document.createElement('canvas');canvas.width=Math.round(96*ratio);canvas.height=96;
-  const ctx=canvas.getContext('2d'),im=ctx.createImageData(canvas.width,canvas.height),W=canvas.width,H=canvas.height,R=H/2,straight=Math.max(0,(W-H)/2);
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
-   const px=x+.5-W/2,py=y+.5-H/2,qx=Math.max(Math.abs(px)-straight,0),r=Math.hypot(qx,py),t=Math.min(1,r/R);
-   const edge=Math.pow(Math.max(0,(t-.5)/.5),1.6),nx=r?Math.sign(px)*qx/r:0,ny=r?py/r:0;
-   const dx=-px*.18*(1-edge)-nx*13*edge,dy=-py*.22*(1-edge)-ny*15*edge;
-   const i=(y*W+x)*4;im.data[i]=Math.max(0,Math.min(255,128+dx/48*255));im.data[i+1]=Math.max(0,Math.min(255,128+dy/48*255));im.data[i+2]=128;im.data[i+3]=255;
-  }
-  ctx.putImageData(im,0,0);mapImage.setAttribute('href',canvas.toDataURL());
- }
- function draw(){
-  const h=state.h,trackRect=track.getBoundingClientRect(),navRect=nav.getBoundingClientRect(),x=trackRect.left-navRect.left+state.x,y=trackRect.top-navRect.top+(64-h)/2;
-  lens.style.width=state.w+'px';lens.style.height=h+'px';lens.style.transform=`translate3d(${x}px,${y}px,0)`;
-  lens.style.visibility=x+state.w<0||x>nav.clientWidth?'hidden':'visible';
-  const filter=document.querySelector('#tab-lens-refraction');filter.setAttribute('width',String(state.w));filter.setAttribute('height',String(h));mapImage.setAttribute('width',String(state.w));mapImage.setAttribute('height',String(h));
-  makeMap(state.w,h);displacement.setAttribute('scale',String(strength));
- }
- function tick(now){
-  const elapsed=now-(lastTime||now-16),dt=Math.min(.032,Math.max(.001,elapsed/1000));lastTime=now;
-  let moving=false;
-  for(const k of ['x','w','h']){if(reduce.matches){state[k]=target[k];velocity[k]=0}else{velocity[k]+=(target[k]-state[k])*380*dt;velocity[k]*=Math.exp(-28*dt);state[k]+=velocity[k]*dt;if(Math.abs(target[k]-state[k])>.05||Math.abs(velocity[k])>.15)moving=true;else{state[k]=target[k];velocity[k]=0}}}
-  const goal=drag?(reduce.matches?15:48):0;strength+=(goal-strength)*Math.min(1,dt*19);if(Math.abs(goal-strength)>.08)moving=true;else strength=goal;
-  draw();raf=moving?requestAnimationFrame(tick):0;if(!raf)lastTime=0;
- }
- function animate(){if(!raf){lastTime=0;raf=requestAnimationFrame(tick)}}
- function rest(instant=false){const r=bounds()[selected];target={x:r.x+4,w:r.w-8,h:48};lens.classList.remove('is-pressed');if(instant){state={...target};velocity={x:0,w:0,h:0};strength=0;draw()}else animate();}
- function aim(clientX){
-  const x=clientX-track.getBoundingClientRect().left,b=bounds(),i=nearest(x);paintPreview(i);
-  const bound=Math.max(b[0].x+b[0].w/2,Math.min(b.at(-1).x+b.at(-1).w/2,x)),overflow=x-bound;
-  const navRect=nav.getBoundingClientRect(),margin=Math.min(navRect.left,window.innerWidth-navRect.right);
-  const limit=Math.min(16,Math.max(4,margin-5));
-  const pull=reduce.matches?0:Math.sign(overflow)*limit*(1-Math.exp(-Math.abs(overflow)/48));
-  const center=bound+pull,width=b[i].w+18;
-  target={x:center-width/2,w:width,h:72};animate();
- }
- function finish(cancel=false){if(!drag)return;const pointerId=drag.id;drag=null;suppressClick=true;if(track.hasPointerCapture(pointerId))track.releasePointerCapture(pointerId);if(!cancel)commit(preview);else{paintPreview(selected);}rest();}
- track.addEventListener('pointerdown',e=>{
-  if(e.button!==0||!e.isPrimary||!e.target.closest('.tab'))return;
-  drag={id:e.pointerId,startX:e.clientX};suppressClick=false;track.setPointerCapture(e.pointerId);lens.classList.add('is-pressed');aim(e.clientX);
- });
- track.addEventListener('pointermove',e=>{if(!drag||drag.id!==e.pointerId)return;if(Math.abs(e.clientX-drag.startX)>4)suppressClick=true;const r=viewport.getBoundingClientRect();if(e.clientX<r.left+25)viewport.scrollLeft-=12;else if(e.clientX>r.right-25)viewport.scrollLeft+=12;aim(e.clientX);});
- track.addEventListener('pointerup',e=>{if(drag?.id===e.pointerId){suppressClick=true;finish();}});
- track.addEventListener('pointercancel',()=>finish(true));track.addEventListener('lostpointercapture',()=>{if(drag)finish(true)});
- // Keep the overlay aligned without letting its expansion change scrollWidth.
- viewport.addEventListener('scroll',draw,{passive:true});
- tabs.forEach((b,i)=>{
-  b.addEventListener('click',e=>{if(suppressClick&&e.detail>0){suppressClick=false;return;}commit(i);rest();});
-  b.addEventListener('keydown',e=>{let next=i;if(e.key==='ArrowRight')next=(i+1)%tabs.length;else if(e.key==='ArrowLeft')next=(i+tabs.length-1)%tabs.length;else if(e.key==='Home')next=0;else if(e.key==='End')next=tabs.length-1;else return;e.preventDefault();finish(true);commit(next,true);tabs[next].scrollIntoView({block:'nearest',inline:'nearest'});rest();});
- });
- document.addEventListener('keydown',e=>{if(e.key==='Escape'&&drag){e.preventDefault();finish(true)}});window.addEventListener('blur',()=>finish(true));
+        const tabs = tabButtons;
+        const track = tabsRail;
+        const viewport = document.querySelector('.tabs-viewport');
+        const lens = document.querySelector('.tab-lens');
+        const halo = document.querySelector('.tab-lens-shadow');
+        const nav = lens.parentElement;
+        const filter = document.querySelector('#tab-lens-refraction');
+        const displacement = document.querySelector('#tab-lens-displacement');
+        const mapImage = document.querySelector('#tab-lens-map');
+        const reduce = reducedMotion;
+        // Geometry in CSS px: tab row, resting pill and pressed lens.
+        const TAB_H = 64, REST_H = 48, PRESS_H = 72, REST_INSET = 4, PRESS_GROW = 18;
+        // Refraction: rim bezel width, strongest rim shift and the map's encoding range.
+        const BEZEL = 16, RIM_SHIFT = 10, MAP_RANGE = 16;
+        // Labels swell under the pressed lens; the lens stretches along fast motion.
+        const LABEL_ZOOM = .1, STRETCH = .14, EDGE_ZONE = 40, EDGE_SPEED = 900;
+        const maps = new Map();
+        const labelZoom = tabs.map(() => '');
+        const idle = (fn) => (window.requestIdleCallback ? window.requestIdleCallback(fn) : setTimeout(fn, 60));
+        let rects = [], selected = activeTabIndex, preview = activeTabIndex, drag = null;
+        let raf = 0, lastTime = 0, suppressClick = false, mapKey = 0, drawn = '';
+        let state = { cx: 0, w: 100, h: REST_H }, velocity = { cx: 0, w: 0, h: 0 }, target = { ...state }, strength = 0;
 
-        const sync=(tab,instant=false)=>{const i=tabs.indexOf(tab);if(i<0)return;finish(true);selected=i;paintPreview(i);tabs.forEach((b,j)=>{b.tabIndex=j===i?0:-1});rest(instant);};
-        new ResizeObserver(()=>sync(tabs[activeTabIndex],true)).observe(track);
-        reduce.addEventListener('change',()=>sync(tabs[activeTabIndex],true));
-        document.addEventListener('visibilitychange',()=>{if(document.hidden)finish(true)});
-        track.classList.add('has-lens');lens.hidden=false;sync(tabs[activeTabIndex],true);
-        return {sync};
+        // Layout offsets ignore the label zoom transforms, so they stay valid mid-press.
+        const measure = () => { rects = tabs.map((b) => ({ x: b.offsetLeft, w: b.offsetWidth })); };
+        const center = (i) => rects[i].x + rects[i].w / 2;
+        const nearest = (x) => rects.reduce((best, r, i) => (Math.abs(center(i) - x) < Math.abs(center(best) - x) ? i : best), 0);
+        const canScroll = () => viewport.scrollWidth - viewport.clientWidth > 1;
+
+        function buildMap(W, H) {
+          const R = H / 2, straight = Math.max(0, (W - H) / 2);
+          const canvas = document.createElement('canvas');
+          canvas.width = W;
+          canvas.height = H;
+          const ctx = canvas.getContext('2d'), image = ctx.createImageData(W, H), data = image.data;
+          for (let y = 0; y < H; y++) {
+            for (let x = 0; x < W; x++) {
+              const px = x + .5 - W / 2, py = y + .5 - H / 2;
+              const qx = Math.max(Math.abs(px) - straight, 0), r = Math.hypot(qx, py), depth = R - r;
+              let dx = 0, dy = 0;
+              // Only the rim bends light outward; the flat centre stays sharp so the label remains legible.
+              if (r > 0 && depth > 0 && depth < BEZEL) {
+                const shift = RIM_SHIFT * Math.pow(1 - depth / BEZEL, 2.4);
+                dx = Math.sign(px) * qx / r * shift;
+                dy = py / r * shift;
+              }
+              const i = (y * W + x) * 4;
+              data[i] = 128 + dx / MAP_RANGE * 127;
+              data[i + 1] = 128 + dy / MAP_RANGE * 127;
+              data[i + 2] = 128;
+              data[i + 3] = 255;
+            }
+          }
+          ctx.putImageData(image, 0, 0);
+          return canvas.toDataURL();
+        }
+        // One map per pressed width (eight tabs), built once and reused instead of per frame.
+        function mapFor(width) {
+          const w = Math.max(PRESS_H, Math.round(width / 2) * 2);
+          if (!maps.has(w)) maps.set(w, buildMap(w, PRESS_H));
+          return w;
+        }
+        function useMap(width) {
+          const w = mapFor(width);
+          if (w === mapKey) return;
+          mapKey = w;
+          mapImage.setAttribute('href', maps.get(w));
+        }
+        function warmMaps() {
+          const pending = rects.map((r) => r.w + PRESS_GROW);
+          const next = () => { if (pending.length) { mapFor(pending.shift()); idle(next); } };
+          idle(next);
+        }
+
+        function paintPreview(i) {
+          preview = i;
+          tabs.forEach((b, j) => b.classList.toggle('is-preview', j === i));
+        }
+        function ensureVisible(i, instant = false) {
+          if (!canScroll()) return;
+          const pad = 28, start = track.offsetLeft + rects[i].x - pad, end = start + rects[i].w + pad * 2;
+          const view = viewport.scrollLeft, width = viewport.clientWidth;
+          const next = start < view ? start : end > view + width ? end - width : view;
+          if (next !== view) viewport.scrollTo({ left: next, behavior: instant || reduce.matches ? 'auto' : 'smooth' });
+        }
+        function commit(i, focus = false) {
+          selected = i;
+          paintPreview(i);
+          activateView(tabs[i], i);
+          if (focus) tabs[i].focus({ preventScroll: true });
+          ensureVisible(i);
+        }
+        function syncEdges() {
+          const max = viewport.scrollWidth - viewport.clientWidth;
+          nav.classList.toggle('can-scroll-start', max > 1 && viewport.scrollLeft > 1);
+          nav.classList.toggle('can-scroll-end', max > 1 && viewport.scrollLeft < max - 1);
+        }
+
+        function draw() {
+          const trackRect = track.getBoundingClientRect(), navRect = nav.getBoundingClientRect();
+          const left = trackRect.left - navRect.left + state.cx - state.w / 2;
+          const top = trackRect.top - navRect.top + (TAB_H - state.h) / 2;
+          // Squash and stretch along the direction of travel, like a drop of liquid.
+          const stretch = reduce.matches ? 0 : STRETCH * (1 - Math.exp(-Math.abs(velocity.cx) / 1200));
+          const transform = `translate3d(${left}px,${top}px,0) scale(${(1 + stretch).toFixed(4)},${(1 - stretch * .5).toFixed(4)})`;
+          lens.style.width = halo.style.width = `${state.w}px`;
+          lens.style.height = halo.style.height = `${state.h}px`;
+          lens.style.transform = halo.style.transform = transform;
+          // A scrolled rail can carry the selected tab past the shell; trim the lens there.
+          const offscreen = left + state.w < 0 || left > nav.clientWidth;
+          const cutStart = canScroll() ? Math.max(0, -left) : 0, cutEnd = canScroll() ? Math.max(0, left + state.w - nav.clientWidth) : 0;
+          lens.style.visibility = offscreen ? 'hidden' : 'visible';
+          halo.style.visibility = offscreen || cutStart || cutEnd ? 'hidden' : 'visible';
+          lens.style.clipPath = cutStart || cutEnd ? `inset(0 ${cutEnd}px 0 ${cutStart}px)` : '';
+          const scale = (MAP_RANGE * 2 * strength).toFixed(2), size = `${state.w}|${state.h}|${scale}`;
+          if (size !== drawn) {
+            drawn = size;
+            for (const el of [filter, mapImage]) {
+              el.setAttribute('width', String(state.w));
+              el.setAttribute('height', String(state.h));
+            }
+            displacement.setAttribute('scale', scale);
+          }
+          // Labels swell as the pressed lens passes over them; vector text stays crisp.
+          tabs.forEach((b, j) => {
+            const near = Math.max(0, 1 - Math.abs(center(j) - state.cx) / (state.w * .62));
+            const zoom = 1 + LABEL_ZOOM * strength * near * near * (3 - 2 * near);
+            const value = zoom > 1.001 ? `scale(${zoom.toFixed(3)})` : '';
+            if (value !== labelZoom[j]) {
+              b.style.transform = value;
+              labelZoom[j] = value;
+            }
+          });
+        }
+        function edgeScroll(dt) {
+          if (!canScroll()) return false;
+          const r = viewport.getBoundingClientRect();
+          const into = drag.x < r.left + EDGE_ZONE ? (drag.x - r.left) / EDGE_ZONE - 1 : drag.x > r.right - EDGE_ZONE ? 1 - (r.right - drag.x) / EDGE_ZONE : 0;
+          if (!into) return false;
+          const before = viewport.scrollLeft;
+          viewport.scrollLeft = before + Math.sign(into) * Math.min(1, Math.abs(into)) * EDGE_SPEED * dt;
+          if (Math.abs(viewport.scrollLeft - before) < .5) return false;
+          aim(drag.x);
+          return true;
+        }
+        function tick(now) {
+          const dt = Math.min(.032, Math.max(.001, (now - (lastTime || now - 16)) / 1000));
+          lastTime = now;
+          // Edge auto-scroll waits for a real drag so a plain click near the rim never shifts the rail.
+          let moving = drag?.moved ? edgeScroll(dt) : false;
+          for (const k of ['cx', 'w', 'h']) {
+            if (reduce.matches) {
+              state[k] = target[k];
+              velocity[k] = 0;
+              continue;
+            }
+            velocity[k] += (target[k] - state[k]) * 380 * dt;
+            velocity[k] *= Math.exp(-28 * dt);
+            state[k] += velocity[k] * dt;
+            if (Math.abs(target[k] - state[k]) > .05 || Math.abs(velocity[k]) > .15) moving = true;
+            else {
+              state[k] = target[k];
+              velocity[k] = 0;
+            }
+          }
+          const goal = drag ? (reduce.matches ? .35 : 1) : 0;
+          strength = reduce.matches ? goal : strength + (goal - strength) * Math.min(1, dt * 16);
+          if (Math.abs(goal - strength) > .002) moving = true;
+          else strength = goal;
+          draw();
+          raf = moving ? requestAnimationFrame(tick) : 0;
+          if (!raf) lastTime = 0;
+        }
+        function animate() {
+          if (!raf) {
+            lastTime = 0;
+            raf = requestAnimationFrame(tick);
+          }
+        }
+        function setPressed(on) {
+          lens.classList.toggle('is-pressed', on);
+          halo.classList.toggle('is-pressed', on);
+        }
+        function rest(instant = false) {
+          const r = rects[selected];
+          target = { cx: r.x + r.w / 2, w: r.w - REST_INSET * 2, h: REST_H };
+          setPressed(false);
+          if (instant) {
+            state = { ...target };
+            velocity = { cx: 0, w: 0, h: 0 };
+            strength = 0;
+            draw();
+          } else animate();
+        }
+        function aim(clientX) {
+          const x = clientX - track.getBoundingClientRect().left, i = nearest(x);
+          paintPreview(i);
+          const bound = Math.max(center(0), Math.min(center(tabs.length - 1), x)), overflow = x - bound;
+          const navRect = nav.getBoundingClientRect(), margin = Math.min(navRect.left, window.innerWidth - navRect.right);
+          const limit = Math.min(16, Math.max(4, margin - 5));
+          const pull = reduce.matches ? 0 : Math.sign(overflow) * limit * (1 - Math.exp(-Math.abs(overflow) / 48));
+          const width = rects[i].w + PRESS_GROW;
+          target = { cx: bound + pull, w: width, h: PRESS_H };
+          useMap(width);
+          animate();
+        }
+        function finish(cancel = false) {
+          if (!drag) return;
+          const pointerId = drag.id;
+          drag = null;
+          suppressClick = true;
+          track.classList.remove('is-dragging', 'is-scrubbing');
+          if (track.hasPointerCapture(pointerId)) track.releasePointerCapture(pointerId);
+          if (cancel) paintPreview(selected);
+          else commit(preview, tabs.includes(document.activeElement));
+          rest();
+        }
+
+        track.addEventListener('pointerdown', (e) => {
+          if (e.button !== 0 || !e.isPrimary || !e.target.closest('.tab')) return;
+          measure();
+          drag = { id: e.pointerId, startX: e.clientX, x: e.clientX, moved: false };
+          suppressClick = false;
+          track.setPointerCapture(e.pointerId);
+          track.classList.add('is-dragging');
+          setPressed(true);
+          aim(e.clientX);
+        });
+        track.addEventListener('pointermove', (e) => {
+          if (!drag || drag.id !== e.pointerId) return;
+          drag.x = e.clientX;
+          if (!drag.moved && Math.abs(e.clientX - drag.startX) > 4) {
+            drag.moved = suppressClick = true;
+            track.classList.add('is-scrubbing');
+          }
+          aim(e.clientX);
+        });
+        track.addEventListener('pointerup', (e) => { if (drag?.id === e.pointerId) finish(); });
+        track.addEventListener('pointercancel', () => finish(true));
+        track.addEventListener('lostpointercapture', () => { if (drag) finish(true); });
+        // Keep the overlay aligned without letting its expansion change scrollWidth.
+        viewport.addEventListener('scroll', () => { draw(); syncEdges(); }, { passive: true });
+        // A plain mouse wheel scrolls the rail sideways when tabs overflow a narrow window.
+        viewport.addEventListener('wheel', (e) => {
+          if (e.ctrlKey || drag || !canScroll() || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
+          const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? viewport.clientWidth : 1;
+          const max = viewport.scrollWidth - viewport.clientWidth;
+          const next = Math.max(0, Math.min(max, viewport.scrollLeft + e.deltaY * unit));
+          if (Math.abs(next - viewport.scrollLeft) < 1) return;
+          e.preventDefault();
+          viewport.scrollLeft = next;
+        }, { passive: false });
+        tabs.forEach((b, i) => {
+          b.addEventListener('click', (e) => {
+            if (suppressClick && e.detail > 0) {
+              suppressClick = false;
+              return;
+            }
+            commit(i);
+            rest();
+          });
+          b.addEventListener('keydown', (e) => {
+            let next = i;
+            if (e.key === 'ArrowRight') next = (i + 1) % tabs.length;
+            else if (e.key === 'ArrowLeft') next = (i + tabs.length - 1) % tabs.length;
+            else if (e.key === 'Home') next = 0;
+            else if (e.key === 'End') next = tabs.length - 1;
+            else return;
+            e.preventDefault();
+            finish(true);
+            commit(next, true);
+            rest();
+          });
+        });
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && drag) {
+            e.preventDefault();
+            finish(true);
+          }
+        });
+        window.addEventListener('blur', () => finish(true));
+
+        const sync = (tab, instant = false) => {
+          const i = tabs.indexOf(tab);
+          if (i < 0) return;
+          finish(true);
+          measure();
+          selected = i;
+          paintPreview(i);
+          tabs.forEach((b, j) => { b.tabIndex = j === i ? 0 : -1; });
+          rest(instant);
+          syncEdges();
+        };
+        new ResizeObserver(() => {
+          sync(tabs[activeTabIndex], true);
+          ensureVisible(activeTabIndex, true);
+          warmMaps();
+        }).observe(track);
+        reduce.addEventListener('change', () => sync(tabs[activeTabIndex], true));
+        document.addEventListener('visibilitychange', () => { if (document.hidden) finish(true); });
+        track.classList.add('has-lens');
+        lens.hidden = false;
+        halo.hidden = false;
+        sync(tabs[activeTabIndex], true);
+        return { sync };
       })();
       const syncTabIndicator = (tab) => tabLens.sync(tab);
       window.addEventListener('resize', () => syncTabIndicator(tabButtons[activeTabIndex]), { passive: true });
@@ -6607,6 +7525,22 @@
           apply(c === 'auto' ? 'light' : (c === 'light' ? 'dark' : 'auto'));
         });
         if (mq && mq.addEventListener) mq.addEventListener('change', paint);
+        var topBtn = document.getElementById('back-to-top'), topTicking = false;
+        function syncTop() {
+          topTicking = false;
+          var shown = window.scrollY > Math.max(560, window.innerHeight * 1.1);
+          if (!shown && topBtn.contains(document.activeElement)) topBtn.blur();
+          topBtn.classList.toggle('is-visible', shown);
+        }
+        if (topBtn) {
+          window.addEventListener('scroll', function () { if (!topTicking) { topTicking = true; requestAnimationFrame(syncTop); } }, { passive: true });
+          window.addEventListener('resize', syncTop);
+          topBtn.addEventListener('click', function () {
+            topBtn.blur();
+            window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+          });
+          syncTop();
+        }
         document.querySelectorAll('[data-result-target]').forEach(function (b) {
           b.addEventListener('click', function () {
             var t = document.querySelector(b.getAttribute('data-result-target'));
