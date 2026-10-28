@@ -2,7 +2,7 @@
 
 ## 项目范围
 
-- 本仓库维护 Cubic（原名 Trade Desk）的原生 HTML/CSS/JavaScript 与 Tauri 2 桌面工具。先阅读本文件、[README.md](README.md)、[PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) 及本次涉及的源码。
+- 本仓库维护 Cubic（原名 Trade Desk）的原生 HTML/CSS/JavaScript 与 Tauri 2 桌面工具。先阅读本文件、[README.md](README.md)、[PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) 及本次涉及的源码；改动界面样式前再读 [DESIGN.md](DESIGN.md)。
 - Claude Code 或其他已获授权的仓库协作者可直接查看和修改仓库文件。README 提供背景，不是唯一可读取的资料入口。
 - 以当前分支源码和配置为实现依据。发现文档、元数据和代码冲突时，说明差异后再确定，不按日期或历史候选静默选版。
 - 只修改任务范围内的文件。不要整库覆盖；保留远端已有的功能、设计和用户补充内容。
@@ -12,6 +12,7 @@
 - Cubic 是本地优先的日常计算和备忘工具，不是 ERP、完整订单跟踪系统、单据审核服务或云端 AI 产品。不要把未实现的 Excel 自动化、PO/PI/CI/PL 管理、生产跟踪或客户同步写成现有功能。
 - 主要前端为 `development/frontend/index.html`；潘通参考数据在 `development/frontend/pantone-data.js`。Tauri 主工程位于 `development/desktop/`。
 - 保留 `.tab`、`.view`、`data-view`、ARIA 与 `activateView` 导航链；修改 DOM 或事件前检查鼠标、键盘及程序化跳转调用。
+- 圆角默认超椭圆：矩形控件用 `--radius-*` 令牌和共享 `corner-shape` 规则，只有胶囊和圆形保留圆端；令牌、例外与回退见 [DESIGN.md](DESIGN.md)，由 `trade-desk-regression.mjs` 检查。
 - 保留现有暖白/灰陶蓝、浅深主题、正式 Logo、字体资源与许可、键盘可达性、焦点可见、减少动画、窄窗布局和明确错误反馈。液态透镜导航须保留拖动预览、松手切页及取消行为。
 - 不改变产品规格、重量、CBM、页/张、净重/毛重、单位换算或舍入规则。估算不等于实测、订舱或承运确认。
 

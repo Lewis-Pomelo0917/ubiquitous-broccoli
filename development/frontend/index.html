@@ -2070,18 +2070,20 @@
     .home-ai-time { flex: 0 0 auto; color: var(--faint); font-variant-numeric: tabular-nums; }
     .home-ai-empty { padding: 26px 0 7px; color: var(--muted); font-size: 13px; text-align: center; }
     .home-ai-empty.is-error { color: var(--danger); }
-    .home-ai-toolbar { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 8px; padding-top: 12px; }
+    /* View controls follow Cubic's compact controls (DESIGN.md): radius tokens, so they take the shared superellipse corner. */
+    .home-ai-toolbar { display: grid; min-width: 0; gap: 8px; padding-top: 12px; }
     .home-ai-toolbar[hidden] { display: none; }
     .home-ai-chips { display: flex; min-width: 0; flex-wrap: wrap; gap: 5px; }
+    .home-ai-view-options { display: flex; min-width: 0; flex-wrap: wrap; gap: 6px; }
     .home-ai-chip {
-      min-height: 26px;
-      padding: 0 9px;
+      min-height: 28px;
+      padding: 0 10px;
       border: 1px solid var(--line);
-      border-radius: 999px;
+      border-radius: var(--radius-button-compact);
       background: transparent;
       color: var(--muted);
       font: inherit;
-      font-size: 11px;
+      font-size: 12px;
       font-variant-numeric: tabular-nums;
       cursor: pointer;
       transition: background .15s ease, border-color .15s ease, color .15s ease;
@@ -2089,20 +2091,17 @@
     .home-ai-chip[hidden] { display: none; }
     .home-ai-chip:hover { background: var(--surface-soft); color: var(--text); }
     .home-ai-chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-hover); }
-    .home-ai-chip:focus-visible,
-    .home-ai-more:focus-visible { outline: 0; box-shadow: var(--focus-ring); }
-    .home-ai-range {
-      flex: 0 0 auto;
-      min-height: 26px;
-      padding: 0 6px;
+    .home-ai-select {
+      min-height: 28px;
+      padding: 0 8px;
       border: 1px solid var(--line);
       border-radius: var(--radius-small);
       outline: 0;
       background: var(--field-bg);
       color: var(--text);
-      font-size: 11px;
+      font-size: 12px;
     }
-    .home-ai-range:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
+    .home-ai-select:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
     .home-ai-events.is-expanded { max-height: min(62vh, 560px); overflow-y: auto; overscroll-behavior: contain; }
     .home-ai-more {
       display: block;
@@ -2120,6 +2119,8 @@
     }
     .home-ai-more[hidden] { display: none; }
     .home-ai-more:hover { background: var(--surface-soft); color: var(--text); }
+    .home-ai-chip:active,
+    .home-ai-more:active { transform: translateY(1px); }
     @media (prefers-reduced-motion: reduce) { .home-ai-chip, .home-ai-more { transition: none; } }
 
     /* ============ TD-GRAY-CLAY-BLUE: consolidated visual system ============ */
@@ -2691,7 +2692,9 @@
     .memo-calendar-day:focus-visible,
     .memo-list-open:focus-visible,
     .memo-tag:focus-visible,
-    .home-ai-link:focus-visible { outline: 0; box-shadow: var(--focus-ring); }
+    .home-ai-link:focus-visible,
+    .home-ai-chip:focus-visible,
+    .home-ai-more:focus-visible { outline: 0; box-shadow: var(--focus-ring); }
     button:disabled { cursor: not-allowed; opacity: .45; }
 
     .view.is-active { animation: td-view-in 200ms cubic-bezier(.22, 1, .36, 1) both; }
@@ -2745,7 +2748,6 @@
       .placeholder-mark,
       .welcome-cover::before,
       .app-dialog-close,
-      .home-ai-chip,
       .back-to-top { corner-shape: round; }
     }
 
@@ -2907,11 +2909,17 @@
                 <button class="home-ai-chip" type="button" data-ai-group="research" aria-pressed="false">研究·工具</button>
                 <button class="home-ai-chip" type="button" data-ai-group="other" aria-pressed="false">其他</button>
               </div>
-              <select class="home-ai-range" id="home-ai-range" aria-label="时间范围">
-                <option value="recent" selected>近期重点</option>
-                <option value="7">近 7 天</option>
-                <option value="30">近 30 天</option>
-              </select>
+              <div class="home-ai-view-options">
+                <select class="home-ai-select" id="home-ai-range" aria-label="时间范围">
+                  <option value="recent" selected>近期重点</option>
+                  <option value="7">近 7 天</option>
+                  <option value="30">近 30 天</option>
+                </select>
+                <select class="home-ai-select" id="home-ai-sort" aria-label="排序方式">
+                  <option value="priority" selected>优先级优先</option>
+                  <option value="newest">最新优先</option>
+                </select>
+              </div>
             </div>
             <div class="home-ai-events" id="home-ai-events" aria-live="polite">
               <div class="home-ai-empty">正在读取…</div>
@@ -6572,8 +6580,29 @@
         research: 'research', tool: 'research', benchmark: 'research'
       };
       const aiFeedGroup = (event) => aiFeedTypeGroups[aiFeedText(event && event.event_type)] || 'other';
-      // view.days: one window for every priority, newest first (browsing); unset keeps the per-priority home windows.
+      const aiFeedCompareKeys = (left, right) => {
+        const a = aiFeedText(left.event.key);
+        const b = aiFeedText(right.event.key);
+        return a < b ? -1 : a > b ? 1 : 0;
+      };
+      // Priority first: the order the worker uses for the home card (importance_key); within a priority, the newer day first.
+      const aiFeedByPriority = (left, right) => left.rank - right.rank
+        || left.age - right.age
+        || right.confidence - left.confidence
+        || right.discovered - left.discovered
+        || aiFeedCompareKeys(left, right);
+      // Newest first by the news date: publication date when the source gave one (a date alone counts as the start of that
+      // day), else when it was first discovered.
+      // Upcoming dates count as today, as they do for the windows; the event key keeps equal items in a fixed order.
+      const aiFeedByNewest = (left, right) => left.age - right.age
+        || right.moment - left.moment
+        || left.rank - right.rank
+        || right.discovered - left.discovered
+        || aiFeedCompareKeys(left, right);
+      // view.days: one window for every priority; unset keeps the per-priority home windows.
       // view.group: only events of that category group ('all' or unset for every group).
+      // view.sort: 'priority' (default) or 'newest'. Repeated titles collapse to their most important copy either way,
+      // so the sort only changes the order, never which items are shown.
       const aiFeedDisplayEvents = (events, now = new Date(), limit = 3, offsetMinutes, view = {}) => {
         const today = aiFeedLocalDay(now, offsetMinutes);
         const days = Number.isFinite(view.days) ? view.days : null;
@@ -6582,30 +6611,29 @@
           .filter((event) => event && typeof event === 'object' && (!group || aiFeedGroup(event) === group))
           .map((event) => {
             const day = aiFeedEventDay(event, offsetMinutes);
+            const published = aiFeedDate(event.published_at);
             const discovered = aiFeedDate(event.discovered_at);
             return {
               event,
               rank: aiFeedPriorityOrder[aiFeedPriority(event.priority)],
               age: day === null ? Infinity : Math.max(0, today - day),
               confidence: Number(event.confidence) || 0,
-              discovered: discovered ? discovered.getTime() : 0
+              discovered: discovered ? discovered.getTime() : 0,
+              moment: published ? Math.min(published.getTime(), now.getTime()) : discovered ? discovered.getTime() : 0
             };
           })
           .filter((item) => item.age <= (days === null ? aiFeedWindowDays[aiFeedPriority(item.event.priority)] : days))
-          .sort((left, right) => (days === null ? left.rank - right.rank || left.age - right.age : left.age - right.age || left.rank - right.rank)
-            || right.confidence - left.confidence
-            || right.discovered - left.discovered
-            || (aiFeedText(left.event.key) < aiFeedText(right.event.key) ? -1 : aiFeedText(left.event.key) > aiFeedText(right.event.key) ? 1 : 0));
+          .sort(aiFeedByPriority);
         const seen = new Set();
-        const chosen = [];
+        const unique = [];
         for (const item of ranked) {
           const key = aiFeedNormalize(item.event.title) || aiFeedText(item.event.key);
           if (seen.has(key)) continue;
           seen.add(key);
-          chosen.push(item.event);
-          if (chosen.length >= limit) break;
+          unique.push(item);
         }
-        return chosen;
+        if (view.sort === 'newest') unique.sort(aiFeedByNewest);
+        return unique.slice(0, limit).map((item) => item.event);
       };
       const aiFeedDayLabel = (event, now = new Date(), offsetMinutes) => {
         const day = aiFeedEventDay(event, offsetMinutes);
@@ -6683,24 +6711,36 @@
       const aiFeedBusy = (status) => ['preparing', 'updating'].includes(aiFeedText(status && status.state));
       const aiFeedCompactLimit = 3;
       const aiFeedViewKey = 'tradeDesk.aiWatchView';
-      const aiFeedView = { group: 'all', range: 'recent', expanded: false };
-      try {
-        const stored = JSON.parse(localStorage.getItem(aiFeedViewKey) || '{}');
-        if (stored && typeof stored === 'object') {
-          if (['all', 'model', 'api', 'security', 'industry', 'research', 'other'].includes(stored.group)) aiFeedView.group = stored.group;
-          if (['recent', '7', '30'].includes(stored.range)) aiFeedView.range = stored.range;
-          aiFeedView.expanded = stored.expanded === true;
-        }
-      } catch (_) {}
+      const aiFeedViewChoices = {
+        group: ['all', 'model', 'api', 'security', 'industry', 'research', 'other'],
+        range: ['recent', '7', '30'],
+        sort: ['priority', 'newest']
+      };
+      // Saved view preferences; a missing or unknown value (e.g. no sort, saved before sorting existed) takes the default.
+      const aiFeedReadView = (raw) => {
+        const view = { group: 'all', range: 'recent', sort: 'priority', expanded: false };
+        try {
+          const stored = JSON.parse(raw || '{}');
+          if (stored && typeof stored === 'object') {
+            for (const name of ['group', 'range', 'sort']) if (aiFeedViewChoices[name].includes(stored[name])) view[name] = stored[name];
+            view.expanded = stored.expanded === true;
+          }
+        } catch (_) {}
+        return view;
+      };
+      let aiFeedStoredView = '';
+      try { aiFeedStoredView = localStorage.getItem(aiFeedViewKey) || ''; } catch (_) {}
+      const aiFeedView = aiFeedReadView(aiFeedStoredView);
       const saveAiFeedView = () => {
         try { localStorage.setItem(aiFeedViewKey, JSON.stringify(aiFeedView)); } catch (_) {}
       };
       const aiFeedRangeDays = () => aiFeedView.range === 'recent' ? undefined : Number(aiFeedView.range);
       const aiFeedAllEvents = () => aiFeedState.feed && Array.isArray(aiFeedState.feed.events) ? aiFeedState.feed.events : [];
-      // Every event the chosen range and category allow; the card shows the first three unless expanded.
-      const aiFeedMatchingEvents = () => aiFeedDisplayEvents(aiFeedAllEvents(), new Date(), Infinity, undefined, { days: aiFeedRangeDays(), group: aiFeedView.group });
+      // Every event the chosen range and category allow, in the chosen order; the card shows the first three unless expanded.
+      const aiFeedMatchingEvents = () => aiFeedDisplayEvents(aiFeedAllEvents(), new Date(), Infinity, undefined, { days: aiFeedRangeDays(), group: aiFeedView.group, sort: aiFeedView.sort });
       const homeAiToolbar = document.getElementById('home-ai-toolbar');
       const homeAiRange = document.getElementById('home-ai-range');
+      const homeAiSort = document.getElementById('home-ai-sort');
       const homeAiMore = document.getElementById('home-ai-more');
       const homeAiChips = homeAiToolbar ? Array.from(homeAiToolbar.querySelectorAll('[data-ai-group]')) : [];
       const homeAiChipNames = Object.fromEntries(homeAiChips.map((chip) => [chip.dataset.aiGroup, chip.textContent]));
@@ -6710,6 +6750,7 @@
         const hasFeed = Boolean(aiFeedState.feed) && !aiFeedState.error && aiFeedAllEvents().length > 0;
         homeAiToolbar.hidden = !hasFeed;
         if (homeAiRange) homeAiRange.value = aiFeedView.range;
+        if (homeAiSort) homeAiSort.value = aiFeedView.sort;
         const counts = {};
         aiFeedDisplayEvents(aiFeedAllEvents(), new Date(), Infinity, undefined, { days: aiFeedRangeDays() })
           .forEach((event) => { const group = aiFeedGroup(event); counts[group] = (counts[group] || 0) + 1; counts.all = (counts.all || 0) + 1; });
@@ -6737,7 +6778,14 @@
       }));
       if (homeAiRange) {
         homeAiRange.addEventListener('change', () => {
-          aiFeedView.range = ['recent', '7', '30'].includes(homeAiRange.value) ? homeAiRange.value : 'recent';
+          aiFeedView.range = aiFeedViewChoices.range.includes(homeAiRange.value) ? homeAiRange.value : 'recent';
+          saveAiFeedView();
+          renderHomeAi();
+        });
+      }
+      if (homeAiSort) {
+        homeAiSort.addEventListener('change', () => {
+          aiFeedView.sort = aiFeedViewChoices.sort.includes(homeAiSort.value) ? homeAiSort.value : 'priority';
           saveAiFeedView();
           renderHomeAi();
         });

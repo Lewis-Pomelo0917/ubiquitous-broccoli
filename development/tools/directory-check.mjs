@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const rootFiles = ['README.md', 'AGENTS.md', 'PROJECT_CONTEXT.md', 'TASK.md', 'RESULTS.md', '.gitignore'];
+const rootFiles = ['README.md', 'AGENTS.md', 'PROJECT_CONTEXT.md', 'DESIGN.md', 'TASK.md', 'RESULTS.md', '.gitignore'];
 const rootDirectories = ['development'];
 const optionalRootEntries = new Set(['.git', 'work']);
 const developmentDirectories = ['frontend', 'desktop', 'tools'];
